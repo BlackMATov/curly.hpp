@@ -230,19 +230,6 @@ namespace curly_hpp
     response::response(response_code_t rc) noexcept
     : code_(rc) {}
 
-    response::response(response_code_t rc, headers_t h) noexcept
-    : code_(rc)
-    , headers_(std::move(h)) {}
-
-    response::response(response_code_t rc, content_t c) noexcept
-    : code_(rc)
-    , content_(std::move(c))  {}
-
-    response::response(response_code_t rc, headers_t h, content_t c) noexcept
-    : code_(rc)
-    , headers_(std::move(h))
-    , content_(std::move(c)) {}
-
     response_code_t response::code() const noexcept {
         return code_;
     }
@@ -376,16 +363,28 @@ namespace curly_hpp
                 return false;
             }
 
-            long response_code = 0;
-            curl_easy_getinfo(
+            long code = 0;
+            if ( CURLE_OK != curl_easy_getinfo(
                 handle_.get(),
                 CURLINFO_RESPONSE_CODE,
-                &response_code);
+                &code) || !code )
+            {
+                status_ = statuses::failed;
+                cond_var_.notify_all();
+                return false;
+            }
 
-            response_ = response(
-                static_cast<response_code_t>(response_code),
-                std::move(response_headers_),
-                std::move(response_content_));
+            try {
+                response_ = response(static_cast<response_code_t>(code));
+                response_.content() = std::move(response_content_);
+                response_.headers() = std::move(response_headers_);
+                response_.uploader() = std::move(uploader_);
+                response_.downloader() = std::move(downloader_);
+            } catch (...) {
+                status_ = statuses::failed;
+                cond_var_.notify_all();
+                return false;
+            }
 
             status_ = statuses::done;
             error_.clear();
@@ -716,40 +715,65 @@ namespace curly_hpp
         return downloader_;
     }
 
-    request request_builder::perform() {
-        return ::perform(*this);
+    request request_builder::send() {
+        return curl_state::with([this](CURLM* curlm){
+            handle_t handle{
+                curl_easy_init(),
+                &curl_easy_cleanup};
+
+            if ( !handle ) {
+                throw exception("curly_hpp: failed to curl_easy_init");
+            }
+
+            auto sreq = std::make_shared<request::internal_state>(
+                std::move(handle),
+                std::move(*this));
+
+            if ( CURLM_OK != curl_multi_add_handle(curlm, sreq->handle().get()) ) {
+                throw exception("curly_hpp: failed to curl_multi_add_handle");
+            }
+
+            try {
+                handles.emplace(sreq->handle().get(), sreq);
+            } catch (...) {
+                curl_multi_remove_handle(curlm, sreq->handle().get());
+                throw;
+            }
+
+            return request(sreq);
+        });
     }
 }
 
 // -----------------------------------------------------------------------------
 //
-// auto_updater
+// auto_performer
 //
 // -----------------------------------------------------------------------------
 
 namespace curly_hpp
 {
-    auto_updater::auto_updater() {
+    auto_performer::auto_performer() {
         thread_ = std::thread([this](){
             while ( !done_ ) {
-                ::update();
-                ::wait_activity(wait_activity());
+                curly_hpp::perform();
+                curly_hpp::wait_activity(wait_activity());
             }
         });
     }
 
-    auto_updater::~auto_updater() noexcept {
+    auto_performer::~auto_performer() noexcept {
         done_.store(true);
         if ( thread_.joinable() ) {
             thread_.join();
         }
     }
 
-    time_ms_t auto_updater::wait_activity() const noexcept {
+    time_ms_t auto_performer::wait_activity() const noexcept {
         return wait_activity_;
     }
 
-    void auto_updater::wait_activity(time_ms_t ms) noexcept {
+    void auto_performer::wait_activity(time_ms_t ms) noexcept {
         wait_activity_ = ms;
     }
 }
@@ -762,7 +786,7 @@ namespace curly_hpp
 
 namespace curly_hpp
 {
-    void update() {
+    void perform() {
         curl_state::with([](CURLM* curlm){
             int running_handles = 0;
             curl_multi_perform(curlm, &running_handles);
@@ -807,28 +831,6 @@ namespace curly_hpp
     void wait_activity(time_ms_t ms) {
         curl_state::with([ms](CURLM* curlm){
             curl_multi_wait(curlm, nullptr, 0, static_cast<int>(ms.count()), nullptr);
-        });
-    }
-
-    request perform(request_builder& rb) {
-        return perform(std::move(rb));
-    }
-
-    request perform(request_builder&& rb) {
-        return curl_state::with([&rb](CURLM* curlm){
-            handle_t handle{curl_easy_init(), &curl_easy_cleanup};
-            if ( !handle ) {
-                throw exception("curly_hpp: failed to curl_easy_init");
-            }
-            auto sreq = std::make_shared<request::internal_state>(std::move(handle), std::move(rb));
-            curl_multi_add_handle(curlm, sreq->handle().get());
-            try {
-                handles.emplace(sreq->handle().get(), sreq);
-            } catch (...) {
-                curl_multi_remove_handle(curlm, sreq->handle().get());
-                throw;
-            }
-            return request(sreq);
         });
     }
 }

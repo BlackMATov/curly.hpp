@@ -104,10 +104,6 @@ namespace curly_hpp
         response& operator=(const response&) = delete;
 
         explicit response(response_code_t rc) noexcept;
-        response(response_code_t rc, headers_t h) noexcept;
-        response(response_code_t rc, content_t c) noexcept;
-        response(response_code_t rc, headers_t h, content_t c) noexcept;
-
         response_code_t code() const noexcept;
 
         content_t& content() noexcept;
@@ -209,7 +205,7 @@ namespace curly_hpp
         downloader_uptr& downloader() noexcept;
         const downloader_uptr& downloader() const noexcept;
 
-        request perform();
+        request send();
 
         template < typename Uploader, typename... Args >
         request_builder& uploader(Args&&... args) {
@@ -238,10 +234,10 @@ namespace curly_hpp
 
 namespace curly_hpp
 {
-    class auto_updater {
+    class auto_performer {
     public:
-        auto_updater();
-        ~auto_updater() noexcept;
+        auto_performer();
+        ~auto_performer() noexcept;
 
         time_ms_t wait_activity() const noexcept;
         void wait_activity(time_ms_t ms) noexcept;
@@ -254,9 +250,6 @@ namespace curly_hpp
 
 namespace curly_hpp
 {
-    void update();
+    void perform();
     void wait_activity(time_ms_t ms);
-
-    request perform(request_builder& rb);
-    request perform(request_builder&& rb);
 }
