@@ -33,7 +33,6 @@ namespace
         CURL,
         void(*)(CURL*)>;
 
-    using time_point_t = std::chrono::steady_clock::time_point;
     using req_state_t = std::shared_ptr<request::internal_state>;
     std::map<CURL*, req_state_t> handles;
 
@@ -130,13 +129,13 @@ namespace curly_hpp
 
 // -----------------------------------------------------------------------------
 //
-// case_insensitive_compare
+// icase_compare
 //
 // -----------------------------------------------------------------------------
 
 namespace curly_hpp
 {
-    bool case_insensitive_compare::operator()(
+    bool icase_compare::operator()(
         const std::string& l,
         const std::string& r) const noexcept
     {
@@ -150,136 +149,36 @@ namespace curly_hpp
 
 // -----------------------------------------------------------------------------
 //
-// request_builder
+// content_t
 //
 // -----------------------------------------------------------------------------
 
 namespace curly_hpp
 {
-    request_builder::request_builder(methods m) noexcept
-    : method_(m) {}
+    content_t::content_t(std::string_view data)
+    : data_(data.cbegin(), data.cend() ) {}
 
-    request_builder::request_builder(std::string u) noexcept
-    : url_(std::move(u)) {}
+    content_t::content_t(std::vector<char> data) noexcept
+    : data_(std::move(data)) {}
 
-    request_builder::request_builder(methods m, std::string u) noexcept
-    : url_(std::move(u))
-    , method_(m) {}
-
-    request_builder& request_builder::url(std::string u) noexcept {
-        url_ = std::move(u);
-        return *this;
+    std::size_t content_t::size() const noexcept {
+        return data_.size();
     }
 
-    request_builder& request_builder::method(methods m) noexcept {
-        method_ = m;
-        return *this;
+    std::vector<char>& content_t::data() noexcept {
+        return data_;
     }
 
-    request_builder& request_builder::header(std::string key, std::string value) {
-        headers_.insert_or_assign(std::move(key), std::move(value));
-        return *this;
+    const std::vector<char>& content_t::data() const noexcept {
+        return data_;
     }
 
-    request_builder& request_builder::verbose(bool v) noexcept {
-        verbose_ = v;
-        return *this;
+    std::string content_t::as_string_copy() const {
+        return {data_.data(), data_.size()};
     }
 
-    request_builder& request_builder::verification(bool v) noexcept {
-        verification_ = v;
-        return *this;
-    }
-
-    request_builder& request_builder::response_timeout(sec_t t) noexcept {
-        response_timeout_ = t;
-        return *this;
-    }
-
-    request_builder& request_builder::connection_timeout(sec_t t) noexcept {
-        connection_timeout_ = t;
-        return *this;
-    }
-
-    request_builder& request_builder::redirections(std::uint32_t r) noexcept {
-        redirections_ = r;
-        return *this;
-    }
-
-    request_builder& request_builder::body(body_t b) noexcept {
-        body_ = std::move(b);
-        return *this;
-    }
-
-    request_builder& request_builder::body(std::string_view b) {
-        body_.assign(b.begin(), b.end());
-        return *this;
-    }
-
-    request_builder& request_builder::uploader(uploader_uptr u) noexcept {
-        uploader_ = std::move(u);
-        return *this;
-    }
-
-    request_builder& request_builder::downloader(downloader_uptr d) noexcept {
-        downloader_ = std::move(d);
-        return *this;
-    }
-
-    const std::string& request_builder::url() const noexcept {
-        return url_;
-    }
-
-    methods request_builder::method() const noexcept {
-        return method_;
-    }
-
-    const headers_t& request_builder::headers() const noexcept {
-        return headers_;
-    }
-
-    bool request_builder::verbose() const noexcept {
-        return verbose_;
-    }
-
-    bool request_builder::verification() const noexcept {
-        return verification_;
-    }
-
-    sec_t request_builder::response_timeout() const noexcept {
-        return response_timeout_;
-    }
-
-    sec_t request_builder::connection_timeout() const noexcept {
-        return connection_timeout_;
-    }
-
-    std::uint32_t request_builder::redirections() const noexcept {
-        return redirections_;
-    }
-
-    body_t& request_builder::body() noexcept {
-        return body_;
-    }
-
-    const body_t& request_builder::body() const noexcept {
-        return body_;
-    }
-
-    uploader_uptr& request_builder::uploader() noexcept {
-        return uploader_;
-    }
-
-    const uploader_uptr& request_builder::uploader() const noexcept {
-        return uploader_;
-    }
-
-    downloader_uptr& request_builder::downloader() noexcept {
-        return downloader_;
-    }
-
-    const downloader_uptr& request_builder::downloader() const noexcept {
-        return downloader_;
+    std::string_view content_t::as_string_view() const noexcept {
+        return {data_.data(), data_.size()};
     }
 }
 
@@ -289,25 +188,43 @@ namespace curly_hpp
 //
 // -----------------------------------------------------------------------------
 
-response::response(response_code_t c, body_t b, headers_t h)
-: code_(c)
-, body_(std::move(b))
-, headers_(std::move(h)) {}
+namespace curly_hpp
+{
+    response::response(response_code_t rc) noexcept
+    : code_(rc) {}
 
-response_code_t response::code() const noexcept {
-    return code_;
-}
+    response::response(response_code_t rc, headers_t h) noexcept
+    : code_(rc)
+    , headers_(std::move(h)) {}
 
-const body_t& response::body() const noexcept {
-    return body_;
-}
+    response::response(response_code_t rc, content_t c) noexcept
+    : code_(rc)
+    , content_(std::move(c))  {}
 
-const headers_t& response::headers() const noexcept {
-    return headers_;
-}
+    response::response(response_code_t rc, headers_t h, content_t c) noexcept
+    : code_(rc)
+    , headers_(std::move(h))
+    , content_(std::move(c)) {}
 
-std::string_view response::body_as_string() const noexcept {
-    return {body_.data(), body_.size()};
+    response_code_t response::code() const noexcept {
+        return code_;
+    }
+
+    content_t& response::content() noexcept {
+        return content_;
+    }
+
+    const content_t& response::content() const noexcept {
+        return content_;
+    }
+
+    headers_t& response::headers() noexcept {
+        return headers_;
+    }
+
+    const headers_t& response::headers() const noexcept {
+        return headers_;
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -323,7 +240,7 @@ namespace curly_hpp
         internal_state(handle_t handle, request_builder&& rb)
         : hlist_(make_header_slist(rb.headers()))
         , handle_(std::move(handle))
-        , body_(std::move(rb.body()))
+        , content_(std::move(rb.content()))
         , uploader_(std::move(rb.uploader()))
         , downloader_(std::move(rb.downloader()))
         {
@@ -356,7 +273,7 @@ namespace curly_hpp
                 curl_easy_setopt(handle_.get(), CURLOPT_UPLOAD, 1L);
                 curl_easy_setopt(handle_.get(), CURLOPT_INFILESIZE_LARGE, uploader_
                     ? static_cast<curl_off_t>(uploader_->size())
-                    : static_cast<curl_off_t>(body_.size()));
+                    : static_cast<curl_off_t>(content_.size()));
                 break;
             case methods::get:
                 curl_easy_setopt(handle_.get(), CURLOPT_HTTPGET, 1L);
@@ -368,7 +285,7 @@ namespace curly_hpp
                 curl_easy_setopt(handle_.get(), CURLOPT_POST, 1L);
                 curl_easy_setopt(handle_.get(), CURLOPT_POSTFIELDSIZE_LARGE, uploader_
                     ? static_cast<curl_off_t>(uploader_->size())
-                    : static_cast<curl_off_t>(body_.size()));
+                    : static_cast<curl_off_t>(content_.size()));
                 break;
             default:
                 throw exception("curly_hpp: unexpected request method");
@@ -390,10 +307,10 @@ namespace curly_hpp
             }
 
             curl_easy_setopt(handle_.get(), CURLOPT_CONNECTTIMEOUT,
-                std::max(sec_t(1), rb.connection_timeout()).count());
+                std::max(time_sec_t(1), rb.connection_timeout()).count());
 
             last_response_ = time_point_t::clock::now();
-            response_timeout_ = std::max(sec_t(1), rb.response_timeout());
+            response_timeout_ = std::max(time_sec_t(1), rb.response_timeout());
         }
 
         bool done() noexcept {
@@ -410,8 +327,8 @@ namespace curly_hpp
 
             response_ = response(
                 static_cast<response_code_t>(response_code),
-                std::move(response_body_),
-                std::move(response_headers_));
+                std::move(response_headers_),
+                std::move(response_content_));
 
             status_ = statuses::done;
             error_.clear();
@@ -528,8 +445,8 @@ namespace curly_hpp
                     return bytes;
                 }
                 std::lock_guard<std::mutex> guard(mutex_);
-                size = std::min(size, body_.size() - uploaded_.load());
-                std::memcpy(dst, body_.data() + uploaded_.load(), size);
+                size = std::min(size, content_.size() - uploaded_.load());
+                std::memcpy(dst, content_.data().data() + uploaded_.load(), size);
                 uploaded_.fetch_add(size);
                 return size;
             } catch (...) {
@@ -544,7 +461,7 @@ namespace curly_hpp
                     downloaded_.fetch_add(bytes);
                     return bytes;
                 }
-                response_body_.insert(response_body_.end(), src, src + size);
+                response_content_.insert(response_content_.end(), src, src + size);
                 downloaded_.fetch_add(size);
                 return size;
             } catch (...) {
@@ -578,22 +495,24 @@ namespace curly_hpp
     private:
         slist_t hlist_;
         handle_t handle_;
-        body_t body_;
+        content_t content_;
         uploader_uptr uploader_;
         downloader_uptr downloader_;
     private:
         time_point_t last_response_;
         time_point_t::duration response_timeout_;
     private:
-        mutable std::mutex mutex_;
-        mutable std::condition_variable cond_var_;
         response response_;
-        body_t response_body_;
         headers_t response_headers_;
+        std::vector<char> response_content_;
+    private:
         std::atomic_size_t uploaded_{0u};
         std::atomic_size_t downloaded_{0u};
         statuses status_{statuses::pending};
         std::string error_{"Unknown error"};
+    private:
+        mutable std::mutex mutex_;
+        mutable std::condition_variable cond_var_;
     };
 }
 
@@ -625,6 +544,141 @@ namespace curly_hpp
 
 // -----------------------------------------------------------------------------
 //
+// request_builder
+//
+// -----------------------------------------------------------------------------
+
+namespace curly_hpp
+{
+    request_builder::request_builder(methods m) noexcept
+    : method_(m) {}
+
+    request_builder::request_builder(std::string u) noexcept
+    : url_(std::move(u)) {}
+
+    request_builder::request_builder(methods m, std::string u) noexcept
+    : url_(std::move(u))
+    , method_(m) {}
+
+    request_builder& request_builder::url(std::string u) noexcept {
+        url_ = std::move(u);
+        return *this;
+    }
+
+    request_builder& request_builder::method(methods m) noexcept {
+        method_ = m;
+        return *this;
+    }
+
+    request_builder& request_builder::header(std::string key, std::string value) {
+        headers_.insert_or_assign(std::move(key), std::move(value));
+        return *this;
+    }
+
+    request_builder& request_builder::verbose(bool v) noexcept {
+        verbose_ = v;
+        return *this;
+    }
+
+    request_builder& request_builder::verification(bool v) noexcept {
+        verification_ = v;
+        return *this;
+    }
+
+    request_builder& request_builder::redirections(std::uint32_t r) noexcept {
+        redirections_ = r;
+        return *this;
+    }
+
+    request_builder& request_builder::response_timeout(time_sec_t t) noexcept {
+        response_timeout_ = t;
+        return *this;
+    }
+
+    request_builder& request_builder::connection_timeout(time_sec_t t) noexcept {
+        connection_timeout_ = t;
+        return *this;
+    }
+
+    request_builder& request_builder::content(std::string_view c) {
+        content_ = content_t(c);
+        return *this;
+    }
+
+    request_builder& request_builder::content(content_t c) noexcept {
+        content_ = std::move(c);
+        return *this;
+    }
+
+    request_builder& request_builder::uploader(uploader_uptr u) noexcept {
+        uploader_ = std::move(u);
+        return *this;
+    }
+
+    request_builder& request_builder::downloader(downloader_uptr d) noexcept {
+        downloader_ = std::move(d);
+        return *this;
+    }
+
+    const std::string& request_builder::url() const noexcept {
+        return url_;
+    }
+
+    methods request_builder::method() const noexcept {
+        return method_;
+    }
+
+    const headers_t& request_builder::headers() const noexcept {
+        return headers_;
+    }
+
+    bool request_builder::verbose() const noexcept {
+        return verbose_;
+    }
+
+    bool request_builder::verification() const noexcept {
+        return verification_;
+    }
+
+    std::uint32_t request_builder::redirections() const noexcept {
+        return redirections_;
+    }
+
+    time_sec_t request_builder::response_timeout() const noexcept {
+        return response_timeout_;
+    }
+
+    time_sec_t request_builder::connection_timeout() const noexcept {
+        return connection_timeout_;
+    }
+
+    content_t& request_builder::content() noexcept {
+        return content_;
+    }
+
+    const content_t& request_builder::content() const noexcept {
+        return content_;
+    }
+
+    uploader_uptr& request_builder::uploader() noexcept {
+        return uploader_;
+    }
+
+    const uploader_uptr& request_builder::uploader() const noexcept {
+        return uploader_;
+    }
+
+    downloader_uptr& request_builder::downloader() noexcept {
+        return downloader_;
+    }
+
+    const downloader_uptr& request_builder::downloader() const noexcept {
+        return downloader_;
+    }
+}
+
+// -----------------------------------------------------------------------------
+//
 // auto_updater
 //
 // -----------------------------------------------------------------------------
@@ -647,11 +701,11 @@ namespace curly_hpp
         }
     }
 
-    ms_t auto_updater::wait_activity() const noexcept {
+    time_ms_t auto_updater::wait_activity() const noexcept {
         return wait_activity_;
     }
 
-    void auto_updater::wait_activity(ms_t ms) noexcept {
+    void auto_updater::wait_activity(time_ms_t ms) noexcept {
         wait_activity_ = ms;
     }
 }
@@ -704,7 +758,7 @@ namespace curly_hpp
         });
     }
 
-    void wait_activity(ms_t ms) {
+    void wait_activity(time_ms_t ms) {
         curl_state::with([ms](CURLM* curlm){
             curl_multi_wait(curlm, nullptr, 0, static_cast<int>(ms.count()), nullptr);
         });

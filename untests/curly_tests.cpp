@@ -100,7 +100,7 @@ TEST_CASE("curly"){
         {
             auto req = net::perform(net::request_builder()
                 .url("https://httpbin.org/delay/2")
-                .response_timeout(net::sec_t(0)));
+                .response_timeout(net::time_sec_t(0)));
             REQUIRE(req.wait() == net::request::statuses::timeout);
             REQUIRE_THROWS_AS(req.get(), net::exception);
         }
@@ -205,9 +205,9 @@ TEST_CASE("curly"){
             .header("Custom-Header-1", "custom_header_value_1")
             .header("Custom-Header-2", "custom header value 2"));
         const auto resp = req.get();
-        const auto body_j = json::parse(resp.body_as_string());
-        REQUIRE(body_j["headers"]["Custom-Header-1"] == "custom_header_value_1");
-        REQUIRE(body_j["headers"]["Custom-Header-2"] == "custom header value 2");
+        const auto content_j = json::parse(resp.content().as_string_view());
+        REQUIRE(content_j["headers"]["Custom-Header-1"] == "custom_header_value_1");
+        REQUIRE(content_j["headers"]["Custom-Header-2"] == "custom header value 2");
     }
 
     SECTION("response_inspection") {
@@ -215,18 +215,18 @@ TEST_CASE("curly"){
             auto req = net::perform(net::request_builder()
                 .url("https://httpbin.org/response-headers?hello=world&world=hello"));
             const auto resp = req.get();
-            const auto body_j = json::parse(resp.body_as_string());
-            REQUIRE(body_j["hello"] == "world");
-            REQUIRE(body_j["world"] == "hello");
+            const auto content_j = json::parse(resp.content().as_string_view());
+            REQUIRE(content_j["hello"] == "world");
+            REQUIRE(content_j["world"] == "hello");
         }
         {
             auto req = net::perform(net::request_builder()
                 .url("https://httpbin.org/response-headers?hello=world&world=hello")
                 .method(net::methods::post));
             const auto resp = req.get();
-            const auto body_j = json::parse(resp.body_as_string());
-            REQUIRE(body_j["hello"] == "world");
-            REQUIRE(body_j["world"] == "hello");
+            const auto content_j = json::parse(resp.content().as_string_view());
+            REQUIRE(content_j["hello"] == "world");
+            REQUIRE(content_j["world"] == "hello");
         }
     }
 
@@ -235,20 +235,20 @@ TEST_CASE("curly"){
             auto req = net::perform(net::request_builder()
                 .url("https://httpbin.org/base64/SFRUUEJJTiBpcyBhd2Vzb21l"));
             const auto resp = req.get();
-            REQUIRE(resp.body_as_string() == "HTTPBIN is awesome");
+            REQUIRE(resp.content().as_string_view() == "HTTPBIN is awesome");
             REQUIRE(req.error().empty());
         }
         {
             auto req = net::perform(net::request_builder()
                 .url("https://httpbin.org/delay/10")
-                .response_timeout(net::sec_t(0)));
+                .response_timeout(net::time_sec_t(0)));
             REQUIRE(req.wait() == net::request::statuses::timeout);
             REQUIRE_FALSE(req.error().empty());
         }
         {
             auto req = net::perform(net::request_builder()
                 .url("https://httpbin.org/delay/10")
-                .response_timeout(net::sec_t(1)));
+                .response_timeout(net::time_sec_t(1)));
             REQUIRE(req.wait() == net::request::statuses::timeout);
             REQUIRE_FALSE(req.error().empty());
         }
@@ -263,9 +263,9 @@ TEST_CASE("curly"){
             REQUIRE(resp.code() == 200u);
             REQUIRE(resp.headers().count("Content-Type"));
             REQUIRE(resp.headers().at("Content-Type") == "image/png");
-            REQUIRE(untests::png_data_length == resp.body().size());
+            REQUIRE(untests::png_data_length == resp.content().size());
             REQUIRE(!std::memcmp(
-                resp.body().data(),
+                resp.content().data().data(),
                 untests::png_data,
                 untests::png_data_length));
         }
@@ -277,9 +277,9 @@ TEST_CASE("curly"){
             REQUIRE(resp.code() == 200u);
             REQUIRE(resp.headers().count("Content-Type"));
             REQUIRE(resp.headers().at("Content-Type") == "image/jpeg");
-            REQUIRE(untests::jpeg_data_length == resp.body().size());
+            REQUIRE(untests::jpeg_data_length == resp.content().size());
             REQUIRE(!std::memcmp(
-                resp.body().data(),
+                resp.content().data().data(),
                 untests::jpeg_data,
                 untests::jpeg_data_length));
         }
@@ -312,31 +312,31 @@ TEST_CASE("curly"){
                 .url("https://httpbin.org/anything")
                 .method(net::methods::put)
                 .header("Content-Type", "application/json")
-                .body(R"({"hello":"world"})"));
+                .content(R"({"hello":"world"})"));
             const auto resp = req.get();
-            const auto body_j = json::parse(resp.body_as_string());
-            REQUIRE(body_j["data"] == R"({"hello":"world"})");
+            const auto content_j = json::parse(resp.content().as_string_view());
+            REQUIRE(content_j["data"] == R"({"hello":"world"})");
         }
         {
             auto req = net::perform(net::request_builder()
                 .url("https://httpbin.org/anything")
                 .method(net::methods::post)
                 .header("Content-Type", "application/json")
-                .body(R"({"hello":"world"})"));
+                .content(R"({"hello":"world"})"));
             const auto resp = req.get();
-            const auto body_j = json::parse(resp.body_as_string());
-            REQUIRE(body_j["data"] == R"({"hello":"world"})");
+            const auto content_j = json::parse(resp.content().as_string_view());
+            REQUIRE(content_j["data"] == R"({"hello":"world"})");
         }
         {
             auto req = net::perform(net::request_builder()
                 .url("https://httpbin.org/anything")
                 .method(net::methods::post)
                 .header("Content-Type", "application/x-www-form-urlencoded")
-                .body("hello=world&world=hello"));
+                .content("hello=world&world=hello"));
             const auto resp = req.get();
-            const auto body_j = json::parse(resp.body_as_string());
-            REQUIRE(body_j["form"]["hello"] == "world");
-            REQUIRE(body_j["form"]["world"] == "hello");
+            const auto content_j = json::parse(resp.content().as_string_view());
+            REQUIRE(content_j["form"]["hello"] == "world");
+            REQUIRE(content_j["form"]["world"] == "hello");
         }
     }
 }
