@@ -28,7 +28,7 @@ namespace
             return 0;
         }
 
-        std::size_t upload(void* dst, std::size_t size) override {
+        std::size_t upload(char* dst, std::size_t size) override {
             (void)dst;
             std::cout << "---------- ** UPLOAD (" << size << ") ** ---------- " << std::endl;
             return size;
@@ -39,7 +39,7 @@ namespace
     public:
         verbose_downloader() = default;
 
-        std::size_t download(const void* src, std::size_t size) override {
+        std::size_t download(const char* src, std::size_t size) override {
             (void)src;
             std::cout << "---------- ** DOWNLOAD (" << size << ") ** ---------- " << std::endl;
             return size;
