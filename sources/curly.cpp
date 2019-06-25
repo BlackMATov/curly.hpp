@@ -129,19 +129,19 @@ namespace curly_hpp
 
 // -----------------------------------------------------------------------------
 //
-// icase_compare
+// icase_string_compare
 //
 // -----------------------------------------------------------------------------
 
 namespace curly_hpp
 {
-    bool icase_compare::operator()(
-        const std::string& l,
-        const std::string& r) const noexcept
+    bool icase_string_compare::operator()(
+        std::string_view l,
+        std::string_view r) const noexcept
     {
         return std::lexicographical_compare(
             l.begin(), l.end(), r.begin(), r.end(),
-            [](const auto lc, const auto rc) {
+            [](const auto lc, const auto rc) noexcept {
                 return std::tolower(lc) < std::tolower(rc);
             });
     }

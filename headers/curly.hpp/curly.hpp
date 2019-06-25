@@ -27,10 +27,11 @@ namespace curly_hpp
         explicit exception(const std::string& what);
     };
 
-    struct icase_compare {
+    struct icase_string_compare {
+        using is_transparent = void;
         bool operator()(
-            const std::string& l,
-            const std::string& r) const noexcept;
+            std::string_view l,
+            std::string_view r) const noexcept;
     };
 
     enum class methods {
@@ -41,7 +42,7 @@ namespace curly_hpp
     };
 
     using response_code_t = std::uint16_t;
-    using headers_t = std::map<std::string, std::string, icase_compare>;
+    using headers_t = std::map<std::string, std::string, icase_string_compare>;
 
     using time_sec_t = std::chrono::seconds;
     using time_ms_t = std::chrono::milliseconds;
