@@ -100,8 +100,8 @@ namespace curly_hpp
         response(response&&) = default;
         response& operator=(response&&) = default;
 
-        response(const response&) = default;
-        response& operator=(const response&) = default;
+        response(const response&) = delete;
+        response& operator=(const response&) = delete;
 
         explicit response(response_code_t rc) noexcept;
         response(response_code_t rc, headers_t h) noexcept;
@@ -115,10 +115,18 @@ namespace curly_hpp
 
         headers_t& headers() noexcept;
         const headers_t& headers() const noexcept;
+
+        uploader_uptr& uploader() noexcept;
+        const uploader_uptr& uploader() const noexcept;
+
+        downloader_uptr& downloader() noexcept;
+        const downloader_uptr& downloader() const noexcept;
     private:
         response_code_t code_{0u};
         content_t content_;
         headers_t headers_;
+        uploader_uptr uploader_;
+        downloader_uptr downloader_;
     };
 }
 
@@ -128,6 +136,7 @@ namespace curly_hpp
     public:
         enum class statuses {
             done,
+            empty,
             failed,
             timeout,
             pending,
@@ -143,7 +152,7 @@ namespace curly_hpp
         statuses wait() const noexcept;
         statuses status() const noexcept;
 
-        const response& get() const;
+        response get();
         const std::string& error() const noexcept;
     private:
         internal_state_ptr state_;
@@ -181,24 +190,36 @@ namespace curly_hpp
         request_builder& uploader(uploader_uptr u) noexcept;
         request_builder& downloader(downloader_uptr d) noexcept;
 
-        [[nodiscard]] const std::string& url() const noexcept;
-        [[nodiscard]] methods method() const noexcept;
-        [[nodiscard]] const headers_t& headers() const noexcept;
+        const std::string& url() const noexcept;
+        methods method() const noexcept;
+        const headers_t& headers() const noexcept;
 
-        [[nodiscard]] bool verbose() const noexcept;
-        [[nodiscard]] bool verification() const noexcept;
-        [[nodiscard]] std::uint32_t redirections() const noexcept;
-        [[nodiscard]] time_sec_t response_timeout() const noexcept;
-        [[nodiscard]] time_sec_t connection_timeout() const noexcept;
+        bool verbose() const noexcept;
+        bool verification() const noexcept;
+        std::uint32_t redirections() const noexcept;
+        time_sec_t response_timeout() const noexcept;
+        time_sec_t connection_timeout() const noexcept;
 
-        [[nodiscard]] content_t& content() noexcept;
-        [[nodiscard]] const content_t& content() const noexcept;
+        content_t& content() noexcept;
+        const content_t& content() const noexcept;
 
-        [[nodiscard]] uploader_uptr& uploader() noexcept;
-        [[nodiscard]] const uploader_uptr& uploader() const noexcept;
+        uploader_uptr& uploader() noexcept;
+        const uploader_uptr& uploader() const noexcept;
 
-        [[nodiscard]] downloader_uptr& downloader() noexcept;
-        [[nodiscard]] const downloader_uptr& downloader() const noexcept;
+        downloader_uptr& downloader() noexcept;
+        const downloader_uptr& downloader() const noexcept;
+
+        request perform();
+
+        template < typename Uploader, typename... Args >
+        request_builder& uploader(Args&&... args) {
+            return uploader(std::make_unique<Uploader>(std::forward<Args>(args)...));
+        }
+
+        template < typename Downloader, typename... Args >
+        request_builder& downloader(Args&&... args) {
+            return downloader(std::make_unique<Downloader>(std::forward<Args>(args)...));
+        }
     private:
         std::string url_;
         methods method_{methods::get};

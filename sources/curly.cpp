@@ -262,6 +262,22 @@ namespace curly_hpp
     const headers_t& response::headers() const noexcept {
         return headers_;
     }
+
+    uploader_uptr& response::uploader() noexcept {
+        return uploader_;
+    }
+
+    const uploader_uptr& response::uploader() const noexcept {
+        return uploader_;
+    }
+
+    downloader_uptr& response::downloader() noexcept {
+        return downloader_;
+    }
+
+    const downloader_uptr& response::downloader() const noexcept {
+        return downloader_;
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -424,7 +440,7 @@ namespace curly_hpp
             return status_;
         }
 
-        const response& get() const {
+        response get() {
             std::unique_lock<std::mutex> lock(mutex_);
             cond_var_.wait(lock, [this](){
                 return status_ != statuses::pending;
@@ -432,7 +448,8 @@ namespace curly_hpp
             if ( status_ != statuses::done ) {
                 throw exception("curly_hpp: response is unavailable");
             }
-            return response_;
+            status_ = statuses::empty;
+            return std::move(response_);
         }
 
         const std::string& error() const noexcept {
@@ -556,7 +573,7 @@ namespace curly_hpp
         return state_->status();
     }
 
-    const response& request::get() const {
+    response request::get() {
         return state_->get();
     }
 
@@ -697,6 +714,10 @@ namespace curly_hpp
 
     const downloader_uptr& request_builder::downloader() const noexcept {
         return downloader_;
+    }
+
+    request request_builder::perform() {
+        return ::perform(*this);
     }
 }
 
