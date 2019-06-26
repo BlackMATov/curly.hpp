@@ -105,24 +105,13 @@ namespace curly_hpp
 
         explicit response(response_code_t rc) noexcept;
         response_code_t code() const noexcept;
-
-        content_t& content() noexcept;
-        const content_t& content() const noexcept;
-
-        headers_t& headers() noexcept;
-        const headers_t& headers() const noexcept;
-
-        uploader_uptr& uploader() noexcept;
-        const uploader_uptr& uploader() const noexcept;
-
-        downloader_uptr& downloader() noexcept;
-        const downloader_uptr& downloader() const noexcept;
+    public:
+        content_t content;
+        headers_t headers;
+        uploader_uptr uploader;
+        downloader_uptr downloader;
     private:
         response_code_t code_{0u};
-        content_t content_;
-        headers_t headers_;
-        uploader_uptr uploader_;
-        downloader_uptr downloader_;
     };
 }
 

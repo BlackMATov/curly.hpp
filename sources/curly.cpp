@@ -256,38 +256,6 @@ namespace curly_hpp
     response_code_t response::code() const noexcept {
         return code_;
     }
-
-    content_t& response::content() noexcept {
-        return content_;
-    }
-
-    const content_t& response::content() const noexcept {
-        return content_;
-    }
-
-    headers_t& response::headers() noexcept {
-        return headers_;
-    }
-
-    const headers_t& response::headers() const noexcept {
-        return headers_;
-    }
-
-    uploader_uptr& response::uploader() noexcept {
-        return uploader_;
-    }
-
-    const uploader_uptr& response::uploader() const noexcept {
-        return uploader_;
-    }
-
-    downloader_uptr& response::downloader() noexcept {
-        return downloader_;
-    }
-
-    const downloader_uptr& response::downloader() const noexcept {
-        return downloader_;
-    }
 }
 
 // -----------------------------------------------------------------------------
@@ -399,10 +367,10 @@ namespace curly_hpp
 
             try {
                 response_ = response(static_cast<response_code_t>(code));
-                response_.content() = std::move(response_content_);
-                response_.headers() = std::move(response_headers_);
-                response_.uploader() = std::move(uploader_);
-                response_.downloader() = std::move(downloader_);
+                response_.content = std::move(response_content_);
+                response_.headers = std::move(response_headers_);
+                response_.uploader = std::move(uploader_);
+                response_.downloader = std::move(downloader_);
             } catch (...) {
                 status_ = statuses::failed;
                 cond_var_.notify_all();
