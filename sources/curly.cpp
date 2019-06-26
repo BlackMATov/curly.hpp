@@ -289,9 +289,9 @@ namespace curly_hpp
                 curl_easy_setopt(curlh_.get(), CURLOPT_USERAGENT, user_agent.c_str());
             }
 
-            curl_easy_setopt(curlh_.get(), CURLOPT_NOSIGNAL, 1);
-            curl_easy_setopt(curlh_.get(), CURLOPT_TCP_KEEPALIVE, 1);
-            curl_easy_setopt(curlh_.get(), CURLOPT_BUFFERSIZE, 64 * 1024);
+            curl_easy_setopt(curlh_.get(), CURLOPT_NOSIGNAL, 1l);
+            curl_easy_setopt(curlh_.get(), CURLOPT_TCP_KEEPALIVE, 1l);
+            curl_easy_setopt(curlh_.get(), CURLOPT_BUFFERSIZE, 65536l);
             curl_easy_setopt(curlh_.get(), CURLOPT_USE_SSL, CURLUSESSL_ALL);
 
             curl_easy_setopt(curlh_.get(), CURLOPT_READDATA, this);
@@ -305,44 +305,47 @@ namespace curly_hpp
 
             curl_easy_setopt(curlh_.get(), CURLOPT_URL, rb.url().c_str());
             curl_easy_setopt(curlh_.get(), CURLOPT_HTTPHEADER, hlist_.get());
-            curl_easy_setopt(curlh_.get(), CURLOPT_VERBOSE, rb.verbose() ? 1 : 0);
+            curl_easy_setopt(curlh_.get(), CURLOPT_VERBOSE, rb.verbose() ? 1l : 0l);
 
             switch ( rb.method() ) {
             case methods::put:
-                curl_easy_setopt(curlh_.get(), CURLOPT_UPLOAD, 1);
-                curl_easy_setopt(curlh_.get(), CURLOPT_INFILESIZE_LARGE, uploader_->size());
+                curl_easy_setopt(curlh_.get(), CURLOPT_UPLOAD, 1l);
+                curl_easy_setopt(curlh_.get(), CURLOPT_INFILESIZE_LARGE,
+                    static_cast<curl_off_t>(uploader_->size()));
                 break;
             case methods::get:
-                curl_easy_setopt(curlh_.get(), CURLOPT_HTTPGET, 1);
+                curl_easy_setopt(curlh_.get(), CURLOPT_HTTPGET, 1l);
                 break;
             case methods::head:
-                curl_easy_setopt(curlh_.get(), CURLOPT_NOBODY, 1);
+                curl_easy_setopt(curlh_.get(), CURLOPT_NOBODY, 1l);
                 break;
             case methods::post:
-                curl_easy_setopt(curlh_.get(), CURLOPT_POST, 1);
-                curl_easy_setopt(curlh_.get(), CURLOPT_POSTFIELDSIZE_LARGE, uploader_->size());
+                curl_easy_setopt(curlh_.get(), CURLOPT_POST, 1l);
+                curl_easy_setopt(curlh_.get(), CURLOPT_POSTFIELDSIZE_LARGE,
+                    static_cast<curl_off_t>(uploader_->size()));
                 break;
             default:
                 throw exception("curly_hpp: unexpected request method");
             }
 
             if ( rb.verification() ) {
-                curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYPEER, 1);
-                curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYHOST, 2);
+                curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYPEER, 1l);
+                curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYHOST, 2l);
             } else {
-                curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYPEER, 0);
-                curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYHOST, 0);
+                curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYPEER, 0l);
+                curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYHOST, 0l);
             }
 
             if ( rb.redirections() ) {
-                curl_easy_setopt(curlh_.get(), CURLOPT_FOLLOWLOCATION, 1);
-                curl_easy_setopt(curlh_.get(), CURLOPT_MAXREDIRS, rb.redirections());
+                curl_easy_setopt(curlh_.get(), CURLOPT_FOLLOWLOCATION, 1l);
+                curl_easy_setopt(curlh_.get(), CURLOPT_MAXREDIRS,
+                    static_cast<long>(rb.redirections()));
             } else {
-                curl_easy_setopt(curlh_.get(), CURLOPT_FOLLOWLOCATION, 0);
+                curl_easy_setopt(curlh_.get(), CURLOPT_FOLLOWLOCATION, 0l);
             }
 
             curl_easy_setopt(curlh_.get(), CURLOPT_CONNECTTIMEOUT,
-                std::max(time_sec_t(1), rb.connection_timeout()).count());
+                static_cast<long>(std::max(time_sec_t(1), rb.connection_timeout()).count()));
 
             last_response_ = time_point_t::clock::now();
             response_timeout_ = std::max(time_sec_t(1), rb.response_timeout());
