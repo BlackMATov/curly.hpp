@@ -79,14 +79,17 @@ namespace
     public:
         using data_t = std::vector<char>;
 
-        default_uploader(const data_t* src) noexcept
-        : data_(*src) {}
+        default_uploader(const data_t* src, std::mutex* m) noexcept
+        : data_(*src)
+        , mutex_(*m) {}
 
         std::size_t size() const override {
+            std::lock_guard<std::mutex> guard(mutex_);
             return data_.size();
         }
 
         std::size_t read(char* dst, std::size_t size) override {
+            std::lock_guard<std::mutex> guard(mutex_);
             assert(size <= data_.size() - uploaded_);
             std::memcpy(dst, data_.data() + uploaded_, size);
             uploaded_ += size;
@@ -95,21 +98,25 @@ namespace
     private:
         const data_t& data_;
         std::size_t uploaded_{0};
+        std::mutex& mutex_;
     };
 
     class default_downloader : public download_handler {
     public:
         using data_t = std::vector<char>;
 
-        default_downloader(data_t* dst) noexcept
-        : data_(*dst) {}
+        default_downloader(data_t* dst, std::mutex* m) noexcept
+        : data_(*dst)
+        , mutex_(*m) {}
 
         std::size_t write(const char* src, std::size_t size) override {
+            std::lock_guard<std::mutex> guard(mutex_);
             data_.insert(data_.end(), src, src + size);
             return size;
         }
     private:
         data_t& data_;
+        std::mutex& mutex_;
     };
 }
 
@@ -249,38 +256,6 @@ namespace curly_hpp
     response_code_t response::code() const noexcept {
         return code_;
     }
-
-    content_t& response::content() noexcept {
-        return content_;
-    }
-
-    const content_t& response::content() const noexcept {
-        return content_;
-    }
-
-    headers_t& response::headers() noexcept {
-        return headers_;
-    }
-
-    const headers_t& response::headers() const noexcept {
-        return headers_;
-    }
-
-    uploader_uptr& response::uploader() noexcept {
-        return uploader_;
-    }
-
-    const uploader_uptr& response::uploader() const noexcept {
-        return uploader_;
-    }
-
-    downloader_uptr& response::downloader() noexcept {
-        return downloader_;
-    }
-
-    const downloader_uptr& response::downloader() const noexcept {
-        return downloader_;
-    }
 }
 
 // -----------------------------------------------------------------------------
@@ -301,11 +276,11 @@ namespace curly_hpp
         , downloader_(std::move(rb.downloader()))
         {
             if ( !uploader_ ) {
-                uploader_ = std::make_unique<default_uploader>(&content_.data());
+                uploader_ = std::make_unique<default_uploader>(&content_.data(), &mutex_);
             }
 
             if ( !downloader_ ) {
-                downloader_ = std::make_unique<default_downloader>(&response_content_);
+                downloader_ = std::make_unique<default_downloader>(&response_content_, &mutex_);
             }
 
             if ( const auto* vi = curl_version_info(CURLVERSION_NOW); vi && vi->version ) {
@@ -314,9 +289,9 @@ namespace curly_hpp
                 curl_easy_setopt(curlh_.get(), CURLOPT_USERAGENT, user_agent.c_str());
             }
 
-            curl_easy_setopt(curlh_.get(), CURLOPT_NOSIGNAL, 1);
-            curl_easy_setopt(curlh_.get(), CURLOPT_TCP_KEEPALIVE, 1);
-            curl_easy_setopt(curlh_.get(), CURLOPT_BUFFERSIZE, 64 * 1024);
+            curl_easy_setopt(curlh_.get(), CURLOPT_NOSIGNAL, 1l);
+            curl_easy_setopt(curlh_.get(), CURLOPT_TCP_KEEPALIVE, 1l);
+            curl_easy_setopt(curlh_.get(), CURLOPT_BUFFERSIZE, 65536l);
             curl_easy_setopt(curlh_.get(), CURLOPT_USE_SSL, CURLUSESSL_ALL);
 
             curl_easy_setopt(curlh_.get(), CURLOPT_READDATA, this);
@@ -330,44 +305,47 @@ namespace curly_hpp
 
             curl_easy_setopt(curlh_.get(), CURLOPT_URL, rb.url().c_str());
             curl_easy_setopt(curlh_.get(), CURLOPT_HTTPHEADER, hlist_.get());
-            curl_easy_setopt(curlh_.get(), CURLOPT_VERBOSE, rb.verbose() ? 1 : 0);
+            curl_easy_setopt(curlh_.get(), CURLOPT_VERBOSE, rb.verbose() ? 1l : 0l);
 
             switch ( rb.method() ) {
             case methods::put:
-                curl_easy_setopt(curlh_.get(), CURLOPT_UPLOAD, 1);
-                curl_easy_setopt(curlh_.get(), CURLOPT_INFILESIZE_LARGE, uploader_->size());
+                curl_easy_setopt(curlh_.get(), CURLOPT_UPLOAD, 1l);
+                curl_easy_setopt(curlh_.get(), CURLOPT_INFILESIZE_LARGE,
+                    static_cast<curl_off_t>(uploader_->size()));
                 break;
             case methods::get:
-                curl_easy_setopt(curlh_.get(), CURLOPT_HTTPGET, 1);
+                curl_easy_setopt(curlh_.get(), CURLOPT_HTTPGET, 1l);
                 break;
             case methods::head:
-                curl_easy_setopt(curlh_.get(), CURLOPT_NOBODY, 1);
+                curl_easy_setopt(curlh_.get(), CURLOPT_NOBODY, 1l);
                 break;
             case methods::post:
-                curl_easy_setopt(curlh_.get(), CURLOPT_POST, 1);
-                curl_easy_setopt(curlh_.get(), CURLOPT_POSTFIELDSIZE_LARGE, uploader_->size());
+                curl_easy_setopt(curlh_.get(), CURLOPT_POST, 1l);
+                curl_easy_setopt(curlh_.get(), CURLOPT_POSTFIELDSIZE_LARGE,
+                    static_cast<curl_off_t>(uploader_->size()));
                 break;
             default:
                 throw exception("curly_hpp: unexpected request method");
             }
 
             if ( rb.verification() ) {
-                curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYPEER, 1);
-                curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYHOST, 2);
+                curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYPEER, 1l);
+                curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYHOST, 2l);
             } else {
-                curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYPEER, 0);
-                curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYHOST, 0);
+                curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYPEER, 0l);
+                curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYHOST, 0l);
             }
 
             if ( rb.redirections() ) {
-                curl_easy_setopt(curlh_.get(), CURLOPT_FOLLOWLOCATION, 1);
-                curl_easy_setopt(curlh_.get(), CURLOPT_MAXREDIRS, rb.redirections());
+                curl_easy_setopt(curlh_.get(), CURLOPT_FOLLOWLOCATION, 1l);
+                curl_easy_setopt(curlh_.get(), CURLOPT_MAXREDIRS,
+                    static_cast<long>(rb.redirections()));
             } else {
-                curl_easy_setopt(curlh_.get(), CURLOPT_FOLLOWLOCATION, 0);
+                curl_easy_setopt(curlh_.get(), CURLOPT_FOLLOWLOCATION, 0l);
             }
 
             curl_easy_setopt(curlh_.get(), CURLOPT_CONNECTTIMEOUT,
-                std::max(time_sec_t(1), rb.connection_timeout()).count());
+                static_cast<long>(std::max(time_sec_t(1), rb.connection_timeout()).count()));
 
             last_response_ = time_point_t::clock::now();
             response_timeout_ = std::max(time_sec_t(1), rb.response_timeout());
@@ -392,10 +370,10 @@ namespace curly_hpp
 
             try {
                 response_ = response(static_cast<response_code_t>(code));
-                response_.content() = std::move(response_content_);
-                response_.headers() = std::move(response_headers_);
-                response_.uploader() = std::move(uploader_);
-                response_.downloader() = std::move(downloader_);
+                response_.content = std::move(response_content_);
+                response_.headers = std::move(response_headers_);
+                response_.uploader = std::move(uploader_);
+                response_.downloader = std::move(downloader_);
             } catch (...) {
                 status_ = statuses::failed;
                 cond_var_.notify_all();
@@ -533,9 +511,9 @@ namespace curly_hpp
 
         std::size_t header_callback_(const char* src, std::size_t size) noexcept {
             try {
+                std::lock_guard<std::mutex> guard(mutex_);
                 const std::string_view header(src, size);
                 if ( !header.compare(0u, 5u, "HTTP/") ) {
-                    std::lock_guard<std::mutex> guard(mutex_);
                     response_headers_.clear();
                 } else if ( const auto sep_idx = header.find(':'); sep_idx != std::string_view::npos ) {
                     if ( const auto key = header.substr(0, sep_idx); !key.empty() ) {
@@ -545,7 +523,6 @@ namespace curly_hpp
                         val = (val_f != std::string_view::npos && val_l != std::string_view::npos)
                             ? val.substr(val_f, val_l)
                             : std::string_view();
-                        std::lock_guard<std::mutex> guard(mutex_);
                         response_headers_.emplace(key, val);
                     }
                 }
@@ -582,7 +559,9 @@ namespace curly_hpp
 namespace curly_hpp
 {
     request::request(internal_state_ptr state)
-    : state_(state) {}
+    : state_(state) {
+        assert(state);
+    }
 
     bool request::cancel() noexcept {
         return state_->cancel();
@@ -835,9 +814,9 @@ namespace curly_hpp
             }
 
             const auto now = time_point_t::clock::now();
-            for ( const auto& [curl, sreq] : handles ) {
-                if ( sreq->check_response_timeout(now) ) {
-                    sreq->fail(CURLE_OPERATION_TIMEDOUT);
+            for ( const auto& iter_p : handles ) {
+                if ( iter_p.second->check_response_timeout(now) ) {
+                    iter_p.second->fail(CURLE_OPERATION_TIMEDOUT);
                 }
             }
 

@@ -69,8 +69,8 @@ auto response = request.get();
 
 // prints results
 std::cout << "Status code: " << response.code() << std::endl;
-std::cout << "Content type: " << response.headers()["content-type"] << std::endl;
-std::cout << "Body content: " << response.content().as_string_view() << std::endl;
+std::cout << "Content type: " << response.headers["content-type"] << std::endl;
+std::cout << "Body content: " << response.content.as_string_view() << std::endl;
 
 // Status code: 200
 // Content type: application/json
@@ -97,8 +97,8 @@ auto request = net::request_builder()
     .send();
 
 auto response = request.get();
-std::cout << "Body content: " << response.content().as_string_view() << std::endl;
-std::cout << "Content Length: " << response.headers()["content-length"] << std::endl;
+std::cout << "Body content: " << response.content.as_string_view() << std::endl;
+std::cout << "Content Length: " << response.headers["content-length"] << std::endl;
 
 // Body content: {
 //     "args": {},
