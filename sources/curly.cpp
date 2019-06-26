@@ -79,14 +79,17 @@ namespace
     public:
         using data_t = std::vector<char>;
 
-        default_uploader(const data_t* src) noexcept
-        : data_(*src) {}
+        default_uploader(const data_t* src, std::mutex* m) noexcept
+        : data_(*src)
+        , mutex_(*m) {}
 
         std::size_t size() const override {
+            std::lock_guard<std::mutex> guard(mutex_);
             return data_.size();
         }
 
         std::size_t read(char* dst, std::size_t size) override {
+            std::lock_guard<std::mutex> guard(mutex_);
             assert(size <= data_.size() - uploaded_);
             std::memcpy(dst, data_.data() + uploaded_, size);
             uploaded_ += size;
@@ -95,21 +98,25 @@ namespace
     private:
         const data_t& data_;
         std::size_t uploaded_{0};
+        std::mutex& mutex_;
     };
 
     class default_downloader : public download_handler {
     public:
         using data_t = std::vector<char>;
 
-        default_downloader(data_t* dst) noexcept
-        : data_(*dst) {}
+        default_downloader(data_t* dst, std::mutex* m) noexcept
+        : data_(*dst)
+        , mutex_(*m) {}
 
         std::size_t write(const char* src, std::size_t size) override {
+            std::lock_guard<std::mutex> guard(mutex_);
             data_.insert(data_.end(), src, src + size);
             return size;
         }
     private:
         data_t& data_;
+        std::mutex& mutex_;
     };
 }
 
@@ -301,11 +308,11 @@ namespace curly_hpp
         , downloader_(std::move(rb.downloader()))
         {
             if ( !uploader_ ) {
-                uploader_ = std::make_unique<default_uploader>(&content_.data());
+                uploader_ = std::make_unique<default_uploader>(&content_.data(), &mutex_);
             }
 
             if ( !downloader_ ) {
-                downloader_ = std::make_unique<default_downloader>(&response_content_);
+                downloader_ = std::make_unique<default_downloader>(&response_content_, &mutex_);
             }
 
             if ( const auto* vi = curl_version_info(CURLVERSION_NOW); vi && vi->version ) {
@@ -533,9 +540,9 @@ namespace curly_hpp
 
         std::size_t header_callback_(const char* src, std::size_t size) noexcept {
             try {
+                std::lock_guard<std::mutex> guard(mutex_);
                 const std::string_view header(src, size);
                 if ( !header.compare(0u, 5u, "HTTP/") ) {
-                    std::lock_guard<std::mutex> guard(mutex_);
                     response_headers_.clear();
                 } else if ( const auto sep_idx = header.find(':'); sep_idx != std::string_view::npos ) {
                     if ( const auto key = header.substr(0, sep_idx); !key.empty() ) {
@@ -545,7 +552,6 @@ namespace curly_hpp
                         val = (val_f != std::string_view::npos && val_l != std::string_view::npos)
                             ? val.substr(val_f, val_l)
                             : std::string_view();
-                        std::lock_guard<std::mutex> guard(mutex_);
                         response_headers_.emplace(key, val);
                     }
                 }
@@ -582,7 +588,9 @@ namespace curly_hpp
 namespace curly_hpp
 {
     request::request(internal_state_ptr state)
-    : state_(state) {}
+    : state_(state) {
+        assert(state);
+    }
 
     bool request::cancel() noexcept {
         return state_->cancel();
