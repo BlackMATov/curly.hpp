@@ -10,8 +10,8 @@
 #include <fstream>
 #include <iostream>
 
-#include <nlohmann/json.hpp>
-using json = nlohmann::json;
+#include <rapidjson/document.h>
+namespace json = rapidjson;
 
 #include <curly.hpp/curly.hpp>
 namespace net = curly_hpp;
@@ -21,6 +21,14 @@ namespace net = curly_hpp;
 
 namespace
 {
+    json::Document json_parse(std::string_view data) {
+        json::Document d;
+        if ( d.Parse(data.data(), data.size()).HasParseError() ) {
+            throw std::logic_error("untests: failed to parse json");
+        }
+        return d;
+    }
+
     class verbose_uploader : public net::upload_handler {
     public:
         verbose_uploader() = default;
@@ -223,7 +231,7 @@ TEST_CASE("curly") {
             .header("Custom-Header-2", "custom header value 2")
             .send();
         const auto resp = req.get();
-        const auto content_j = json::parse(resp.content().as_string_view());
+        const auto content_j = json_parse(resp.content().as_string_view());
         REQUIRE(content_j["headers"]["Custom-Header-1"] == "custom_header_value_1");
         REQUIRE(content_j["headers"]["Custom-Header-2"] == "custom header value 2");
     }
@@ -235,7 +243,7 @@ TEST_CASE("curly") {
                 .method(net::methods::get)
                 .send();
             const auto resp = req.get();
-            const auto content_j = json::parse(resp.content().as_string_view());
+            const auto content_j = json_parse(resp.content().as_string_view());
             REQUIRE(content_j["hello"] == "world");
             REQUIRE(content_j["world"] == "hello");
         }
@@ -245,7 +253,7 @@ TEST_CASE("curly") {
                 .method(net::methods::post)
                 .send();
             const auto resp = req.get();
-            const auto content_j = json::parse(resp.content().as_string_view());
+            const auto content_j = json_parse(resp.content().as_string_view());
             REQUIRE(content_j["hello"] == "world");
             REQUIRE(content_j["world"] == "hello");
         }
@@ -335,7 +343,7 @@ TEST_CASE("curly") {
                 .header("Content-Type", "application/json")
                 .content(R"({"hello":"world"})")
                 .send().get();
-            const auto content_j = json::parse(resp.content().as_string_view());
+            const auto content_j = json_parse(resp.content().as_string_view());
             REQUIRE(content_j["data"] == R"({"hello":"world"})");
         }
         {
@@ -345,7 +353,7 @@ TEST_CASE("curly") {
                 .header("Content-Type", "application/json")
                 .content(R"({"hello":"world"})")
                 .send().get();
-            const auto content_j = json::parse(resp.content().as_string_view());
+            const auto content_j = json_parse(resp.content().as_string_view());
             REQUIRE(content_j["data"] == R"({"hello":"world"})");
         }
         {
@@ -355,7 +363,7 @@ TEST_CASE("curly") {
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .content("hello=world&world=hello")
                 .send().get();
-            const auto content_j = json::parse(resp.content().as_string_view());
+            const auto content_j = json_parse(resp.content().as_string_view());
             REQUIRE(content_j["form"]["hello"] == "world");
             REQUIRE(content_j["form"]["world"] == "hello");
         }

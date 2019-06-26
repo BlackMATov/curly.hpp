@@ -6,38 +6,6 @@ project(curly.hpp.untests)
 include(FetchContent)
 
 #
-# nlohmann/json
-#
-
-set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
-
-FetchContent_Declare(
-    nlohmann_json
-    GIT_REPOSITORY https://github.com/nlohmann/json)
-
-FetchContent_GetProperties(nlohmann_json)
-if(NOT nlohmann_json_POPULATED)
-    FetchContent_Populate(nlohmann_json)
-    add_subdirectory(${nlohmann_json_SOURCE_DIR} ${nlohmann_json_BINARY_DIR})
-endif()
-
-#
-# catchorg/catch2
-#
-
-set(CATCH_BUILD_TESTING OFF CACHE BOOL "" FORCE)
-
-FetchContent_Declare(
-    catchorg_catch2
-    GIT_REPOSITORY https://github.com/catchorg/catch2)
-
-FetchContent_GetProperties(catchorg_catch2)
-if(NOT catchorg_catch2_POPULATED)
-    FetchContent_Populate(catchorg_catch2)
-    add_subdirectory(${catchorg_catch2_SOURCE_DIR} ${catchorg_catch2_BINARY_DIR})
-endif()
-
-#
 # coverage
 #
 
@@ -55,9 +23,7 @@ endif()
 
 file(GLOB UNTESTS_SOURCES "*.cpp" "*.hpp")
 add_executable(${PROJECT_NAME} ${UNTESTS_SOURCES})
-
-target_link_libraries(${PROJECT_NAME}
-    nlohmann_json Catch2 curly.hpp)
+target_link_libraries(${PROJECT_NAME} curly.hpp)
 
 target_compile_options(${PROJECT_NAME}
     PRIVATE
@@ -68,3 +34,33 @@ target_compile_options(${PROJECT_NAME}
         -Wall -Wextra -Wpedantic>)
 
 add_test(${PROJECT_NAME} ${PROJECT_NAME})
+
+#
+# catchorg/catch2
+#
+
+FetchContent_Declare(
+    catchorg_catch2
+    GIT_REPOSITORY https://github.com/catchorg/catch2)
+
+FetchContent_GetProperties(catchorg_catch2)
+if(NOT catchorg_catch2_POPULATED)
+    FetchContent_Populate(catchorg_catch2)
+    target_include_directories(${PROJECT_NAME}
+        PRIVATE ${catchorg_catch2_SOURCE_DIR}/single_include)
+endif()
+
+#
+# tencent/rapidjson
+#
+
+FetchContent_Declare(
+    tencent_rapidjson
+    GIT_REPOSITORY https://github.com/tencent/rapidjson)
+
+FetchContent_GetProperties(tencent_rapidjson)
+if(NOT tencent_rapidjson_POPULATED)
+    FetchContent_Populate(tencent_rapidjson)
+    target_include_directories(${PROJECT_NAME}
+        PRIVATE ${tencent_rapidjson_SOURCE_DIR}/include)
+endif()
