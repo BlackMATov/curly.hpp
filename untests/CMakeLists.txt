@@ -3,8 +3,6 @@ cmake_minimum_required(VERSION 3.11 FATAL_ERROR)
 
 project(curly.hpp.untests)
 
-include(FetchContent)
-
 #
 # coverage
 #
@@ -39,6 +37,7 @@ add_test(${PROJECT_NAME} ${PROJECT_NAME})
 # catchorg/catch2
 #
 
+include(FetchContent)
 FetchContent_Declare(
     catchorg_catch2
     GIT_REPOSITORY https://github.com/catchorg/catch2)
@@ -54,6 +53,7 @@ endif()
 # tencent/rapidjson
 #
 
+include(FetchContent)
 FetchContent_Declare(
     tencent_rapidjson
     GIT_REPOSITORY https://github.com/tencent/rapidjson)

@@ -20,14 +20,13 @@ matrix:
     - os: osx
       osx_image: xcode10
       compiler: clang
-      addons: { homebrew: { packages: ["lcov"] } }
       after_success: ./scripts/upload_coverage.sh
 before_install:
   - eval "${MATRIX_EVAL}"
   - if [ "$TRAVIS_OS_NAME" == 'osx' ]; then
     brew update;
     brew upgrade cmake;
-    brew install git-lfs;
+    brew install lcov git-lfs;
     fi
   - if [ "$TRAVIS_OS_NAME" == 'linux' ]; then
     mkdir $HOME/cmake;
