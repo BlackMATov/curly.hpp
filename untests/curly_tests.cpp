@@ -368,6 +368,59 @@ TEST_CASE("curly") {
             REQUIRE(content_j["form"]["world"] == "hello");
         }
     }
+
+    SECTION("ssl_verification") {
+        {
+            auto req0 = net::request_builder("https://expired.badssl.com")
+                .method(net::methods::head)
+                .verification(true)
+                .send();
+            REQUIRE(req0.wait() == net::request::statuses::failed);
+
+            auto req1 = net::request_builder("https://wrong.host.badssl.com")
+                .method(net::methods::head)
+                .verification(true)
+                .send();
+            REQUIRE(req1.wait() == net::request::statuses::failed);
+
+            auto req2 = net::request_builder("https://self-signed.badssl.com")
+                .method(net::methods::head)
+                .verification(true)
+                .send();
+            REQUIRE(req2.wait() == net::request::statuses::failed);
+
+            auto req3 = net::request_builder("https://untrusted-root.badssl.com")
+                .method(net::methods::head)
+                .verification(true)
+                .send();
+            REQUIRE(req3.wait() == net::request::statuses::failed);
+        }
+        {
+            auto req0 = net::request_builder("https://expired.badssl.com")
+                .method(net::methods::head)
+                .verification(false)
+                .send();
+            REQUIRE(req0.wait() == net::request::statuses::done);
+
+            auto req1 = net::request_builder("https://wrong.host.badssl.com")
+                .method(net::methods::head)
+                .verification(false)
+                .send();
+            REQUIRE(req1.wait() == net::request::statuses::done);
+
+            auto req2 = net::request_builder("https://self-signed.badssl.com")
+                .method(net::methods::head)
+                .verification(false)
+                .send();
+            REQUIRE(req2.wait() == net::request::statuses::done);
+
+            auto req3 = net::request_builder("https://untrusted-root.badssl.com")
+                .method(net::methods::head)
+                .verification(false)
+                .send();
+            REQUIRE(req3.wait() == net::request::statuses::done);
+        }
+    }
 }
 
 TEST_CASE("curly_examples") {
