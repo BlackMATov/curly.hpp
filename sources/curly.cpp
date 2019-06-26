@@ -7,6 +7,7 @@
 #include <curly.hpp/curly.hpp>
 
 #include <cctype>
+#include <cassert>
 #include <cstring>
 
 #include <mutex>
@@ -52,7 +53,11 @@ namespace
                 } else {
                     header_builder.append(";");
                 }
-                result = curl_slist_append(result, header_builder.c_str());
+                curl_slist* tmp_result = curl_slist_append(result, header_builder.c_str());
+                if ( !tmp_result ) {
+                    throw exception("curly_hpp: failed to curl_slist_append");
+                }
+                result = tmp_result;
             } catch (...) {
                 curl_slist_free_all(result);
                 throw;
@@ -72,8 +77,8 @@ namespace
             return data_.size();
         }
 
-        std::size_t upload(char* dst, std::size_t size) override {
-            size = std::min(size, data_.size() - uploaded_);
+        std::size_t read(char* dst, std::size_t size) override {
+            assert(size <= data_.size() - uploaded_);
             std::memcpy(dst, data_.data() + uploaded_, size);
             uploaded_ += size;
             return size;
@@ -90,7 +95,7 @@ namespace
         default_downloader(data_t* dst) noexcept
         : data_(*dst) {}
 
-        std::size_t download(const char* src, std::size_t size) override {
+        std::size_t write(const char* src, std::size_t size) override {
             data_.insert(data_.end(), src, src + size);
             return size;
         }
@@ -112,7 +117,9 @@ namespace
     class curl_state {
     public:
         template < typename F >
-        static std::invoke_result_t<F, CURLM*> with(F&& f) {
+        static std::invoke_result_t<F, CURLM*> with(F&& f)
+            noexcept(std::is_nothrow_invocable_v<F, CURLM*>)
+        {
             std::lock_guard<std::mutex> guard(mutex_);
             if ( !self_ ) {
                 self_ = std::make_unique<curl_state>();
@@ -496,7 +503,10 @@ namespace curly_hpp
 
         std::size_t upload_callback_(char* dst, std::size_t size) noexcept {
             try {
-                return uploader_->upload(dst, size);
+                size = std::min(size, uploader_->size() - uploaded_.load());
+                const std::size_t read_bytes = uploader_->read(dst, size);
+                uploaded_.fetch_add(read_bytes);
+                return read_bytes;
             } catch (...) {
                 return CURL_READFUNC_ABORT;
             }
@@ -504,7 +514,9 @@ namespace curly_hpp
 
         std::size_t download_callback_(const char* src, std::size_t size) noexcept {
             try {
-                return downloader_->download(src, size);
+                const std::size_t written_bytes = downloader_->write(src, size);
+                downloaded_.fetch_add(written_bytes);
+                return written_bytes;
             } catch (...) {
                 return 0u;
             }
@@ -546,6 +558,9 @@ namespace curly_hpp
         response response_;
         headers_t response_headers_;
         std::vector<char> response_content_;
+    private:
+        std::atomic_size_t uploaded_{0u};
+        std::atomic_size_t downloaded_{0u};
     private:
         statuses status_{statuses::pending};
         std::string error_{"Unknown error"};

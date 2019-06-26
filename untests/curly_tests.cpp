@@ -29,7 +29,7 @@ namespace
             return 0;
         }
 
-        std::size_t upload(char* dst, std::size_t size) override {
+        std::size_t read(char* dst, std::size_t size) override {
             (void)dst;
             std::cout << "---------- ** UPLOAD (" << size << ") ** ---------- " << std::endl;
             return size;
@@ -40,7 +40,7 @@ namespace
     public:
         verbose_downloader() = default;
 
-        std::size_t download(const char* src, std::size_t size) override {
+        std::size_t write(const char* src, std::size_t size) override {
             (void)src;
             std::cout << "---------- ** DOWNLOAD (" << size << ") ** ---------- " << std::endl;
             return size;
@@ -452,7 +452,7 @@ TEST_CASE("curly_examples") {
                 file_dowloader(const char* filename)
                 : stream_(filename, std::ofstream::binary) {}
 
-                std::size_t download(const char* src, std::size_t size) override {
+                std::size_t write(const char* src, std::size_t size) override {
                     stream_.write(src, size);
                     return size;
                 }
@@ -463,7 +463,7 @@ TEST_CASE("curly_examples") {
             net::request_builder()
                 .url("https://httpbin.org/image/jpeg")
                 .downloader<file_dowloader>("image.jpeg")
-                .send().wait();
+                .send().get();
         }
         {
             class file_uploader : public net::upload_handler {
@@ -471,30 +471,28 @@ TEST_CASE("curly_examples") {
                 file_uploader(const char* filename)
                 : stream_(filename, std::ifstream::binary) {
                     stream_.seekg(0, std::ios::end);
-                    available_ = static_cast<std::size_t>(stream_.tellg());
+                    size_ = static_cast<std::size_t>(stream_.tellg());
                     stream_.seekg(0, std::ios::beg);
                 }
 
                 std::size_t size() const override {
-                    return available_;
+                    return size_;
                 }
 
-                std::size_t upload(char* dst, std::size_t size) override {
-                    std::size_t read_bytes = std::min(size, available_);
-                    stream_.read(dst, read_bytes);
-                    available_ -= read_bytes;
-                    return read_bytes;
+                std::size_t read(char* dst, std::size_t size) override {
+                    stream_.read(dst, size);
+                    return size;
                 }
             private:
+                std::size_t size_{0u};
                 std::ifstream stream_;
-                std::size_t available_{0u};
             };
 
             net::request_builder()
                 .method(net::methods::post)
                 .url("https://httpbin.org/anything")
                 .uploader<file_uploader>("image.jpeg")
-                .send().wait();
+                .send().get();
         }
     }
 }

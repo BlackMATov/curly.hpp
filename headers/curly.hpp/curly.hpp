@@ -52,13 +52,13 @@ namespace curly_hpp
     public:
         virtual ~upload_handler() {}
         virtual std::size_t size() const = 0;
-        virtual std::size_t upload(char* dst, std::size_t size) = 0;
+        virtual std::size_t read(char* dst, std::size_t size) = 0;
     };
 
     class download_handler {
     public:
         virtual ~download_handler() {}
-        virtual std::size_t download(const char* src, std::size_t size) = 0;
+        virtual std::size_t write(const char* src, std::size_t size) = 0;
     };
 
     using uploader_uptr = std::unique_ptr<upload_handler>;
