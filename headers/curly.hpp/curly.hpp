@@ -210,7 +210,7 @@ namespace curly_hpp
         methods method_{methods::get};
         headers_t headers_;
         bool verbose_{false};
-        bool verification_{true};
+        bool verification_{false};
         std::uint32_t redirections_{10u};
         time_sec_t response_timeout_{60u};
         time_sec_t connection_timeout_{20u};
