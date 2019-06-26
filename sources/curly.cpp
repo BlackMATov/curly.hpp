@@ -31,7 +31,7 @@ namespace
         curl_slist,
         void(*)(curl_slist*)>;
 
-    using handle_t = std::unique_ptr<
+    using curlh_t = std::unique_ptr<
         CURL,
         void(*)(CURL*)>;
 
@@ -285,9 +285,9 @@ namespace curly_hpp
 {
     class request::internal_state final {
     public:
-        internal_state(handle_t handle, request_builder&& rb)
+        internal_state(curlh_t curlh, request_builder&& rb)
         : hlist_(make_header_slist(rb.headers()))
-        , handle_(std::move(handle))
+        , curlh_(std::move(curlh))
         , content_(std::move(rb.content()))
         , uploader_(std::move(rb.uploader()))
         , downloader_(std::move(rb.downloader()))
@@ -303,62 +303,62 @@ namespace curly_hpp
             if ( const auto* vi = curl_version_info(CURLVERSION_NOW); vi && vi->version ) {
                 std::string user_agent("cURL/");
                 user_agent.append(vi->version);
-                curl_easy_setopt(handle_.get(), CURLOPT_USERAGENT, user_agent.c_str());
+                curl_easy_setopt(curlh_.get(), CURLOPT_USERAGENT, user_agent.c_str());
             }
 
-            curl_easy_setopt(handle_.get(), CURLOPT_NOSIGNAL, 1);
-            curl_easy_setopt(handle_.get(), CURLOPT_TCP_KEEPALIVE, 1);
-            curl_easy_setopt(handle_.get(), CURLOPT_BUFFERSIZE, 64 * 1024);
-            curl_easy_setopt(handle_.get(), CURLOPT_USE_SSL, CURLUSESSL_ALL);
+            curl_easy_setopt(curlh_.get(), CURLOPT_NOSIGNAL, 1);
+            curl_easy_setopt(curlh_.get(), CURLOPT_TCP_KEEPALIVE, 1);
+            curl_easy_setopt(curlh_.get(), CURLOPT_BUFFERSIZE, 64 * 1024);
+            curl_easy_setopt(curlh_.get(), CURLOPT_USE_SSL, CURLUSESSL_ALL);
 
-            curl_easy_setopt(handle_.get(), CURLOPT_READDATA, this);
-            curl_easy_setopt(handle_.get(), CURLOPT_READFUNCTION, &s_upload_callback_);
+            curl_easy_setopt(curlh_.get(), CURLOPT_READDATA, this);
+            curl_easy_setopt(curlh_.get(), CURLOPT_READFUNCTION, &s_upload_callback_);
 
-            curl_easy_setopt(handle_.get(), CURLOPT_WRITEDATA, this);
-            curl_easy_setopt(handle_.get(), CURLOPT_WRITEFUNCTION, &s_download_callback_);
+            curl_easy_setopt(curlh_.get(), CURLOPT_WRITEDATA, this);
+            curl_easy_setopt(curlh_.get(), CURLOPT_WRITEFUNCTION, &s_download_callback_);
 
-            curl_easy_setopt(handle_.get(), CURLOPT_HEADERDATA, this);
-            curl_easy_setopt(handle_.get(), CURLOPT_HEADERFUNCTION, &s_header_callback_);
+            curl_easy_setopt(curlh_.get(), CURLOPT_HEADERDATA, this);
+            curl_easy_setopt(curlh_.get(), CURLOPT_HEADERFUNCTION, &s_header_callback_);
 
-            curl_easy_setopt(handle_.get(), CURLOPT_URL, rb.url().c_str());
-            curl_easy_setopt(handle_.get(), CURLOPT_HTTPHEADER, hlist_.get());
-            curl_easy_setopt(handle_.get(), CURLOPT_VERBOSE, rb.verbose() ? 1 : 0);
+            curl_easy_setopt(curlh_.get(), CURLOPT_URL, rb.url().c_str());
+            curl_easy_setopt(curlh_.get(), CURLOPT_HTTPHEADER, hlist_.get());
+            curl_easy_setopt(curlh_.get(), CURLOPT_VERBOSE, rb.verbose() ? 1 : 0);
 
             switch ( rb.method() ) {
             case methods::put:
-                curl_easy_setopt(handle_.get(), CURLOPT_UPLOAD, 1);
-                curl_easy_setopt(handle_.get(), CURLOPT_INFILESIZE_LARGE, uploader_->size());
+                curl_easy_setopt(curlh_.get(), CURLOPT_UPLOAD, 1);
+                curl_easy_setopt(curlh_.get(), CURLOPT_INFILESIZE_LARGE, uploader_->size());
                 break;
             case methods::get:
-                curl_easy_setopt(handle_.get(), CURLOPT_HTTPGET, 1);
+                curl_easy_setopt(curlh_.get(), CURLOPT_HTTPGET, 1);
                 break;
             case methods::head:
-                curl_easy_setopt(handle_.get(), CURLOPT_NOBODY, 1);
+                curl_easy_setopt(curlh_.get(), CURLOPT_NOBODY, 1);
                 break;
             case methods::post:
-                curl_easy_setopt(handle_.get(), CURLOPT_POST, 1);
-                curl_easy_setopt(handle_.get(), CURLOPT_POSTFIELDSIZE_LARGE, uploader_->size());
+                curl_easy_setopt(curlh_.get(), CURLOPT_POST, 1);
+                curl_easy_setopt(curlh_.get(), CURLOPT_POSTFIELDSIZE_LARGE, uploader_->size());
                 break;
             default:
                 throw exception("curly_hpp: unexpected request method");
             }
 
             if ( rb.verification() ) {
-                curl_easy_setopt(handle.get(), CURLOPT_SSL_VERIFYPEER, 1);
-                curl_easy_setopt(handle.get(), CURLOPT_SSL_VERIFYHOST, 2);
+                curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYPEER, 1);
+                curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYHOST, 2);
             } else {
-                curl_easy_setopt(handle.get(), CURLOPT_SSL_VERIFYPEER, 0);
-                curl_easy_setopt(handle.get(), CURLOPT_SSL_VERIFYHOST, 0);
+                curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYPEER, 0);
+                curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYHOST, 0);
             }
 
             if ( rb.redirections() ) {
-                curl_easy_setopt(handle_.get(), CURLOPT_FOLLOWLOCATION, 1);
-                curl_easy_setopt(handle_.get(), CURLOPT_MAXREDIRS, rb.redirections());
+                curl_easy_setopt(curlh_.get(), CURLOPT_FOLLOWLOCATION, 1);
+                curl_easy_setopt(curlh_.get(), CURLOPT_MAXREDIRS, rb.redirections());
             } else {
-                curl_easy_setopt(handle_.get(), CURLOPT_FOLLOWLOCATION, 0);
+                curl_easy_setopt(curlh_.get(), CURLOPT_FOLLOWLOCATION, 0);
             }
 
-            curl_easy_setopt(handle_.get(), CURLOPT_CONNECTTIMEOUT,
+            curl_easy_setopt(curlh_.get(), CURLOPT_CONNECTTIMEOUT,
                 std::max(time_sec_t(1), rb.connection_timeout()).count());
 
             last_response_ = time_point_t::clock::now();
@@ -373,7 +373,7 @@ namespace curly_hpp
 
             long code = 0;
             if ( CURLE_OK != curl_easy_getinfo(
-                handle_.get(),
+                curlh_.get(),
                 CURLINFO_RESPONSE_CODE,
                 &code) || !code )
             {
@@ -467,8 +467,8 @@ namespace curly_hpp
             return error_;
         }
 
-        const handle_t& handle() const noexcept {
-            return handle_;
+        const curlh_t& curlh() const noexcept {
+            return curlh_;
         }
 
         bool check_response_timeout(time_point_t now) const noexcept {
@@ -548,7 +548,7 @@ namespace curly_hpp
         }
     private:
         slist_t hlist_;
-        handle_t handle_;
+        curlh_t curlh_;
         content_t content_;
         uploader_uptr uploader_;
         downloader_uptr downloader_;
@@ -733,26 +733,26 @@ namespace curly_hpp
 
     request request_builder::send() {
         return curl_state::with([this](CURLM* curlm){
-            handle_t handle{
+            curlh_t curlh{
                 curl_easy_init(),
                 &curl_easy_cleanup};
 
-            if ( !handle ) {
+            if ( !curlh ) {
                 throw exception("curly_hpp: failed to curl_easy_init");
             }
 
             auto sreq = std::make_shared<request::internal_state>(
-                std::move(handle),
+                std::move(curlh),
                 std::move(*this));
 
-            if ( CURLM_OK != curl_multi_add_handle(curlm, sreq->handle().get()) ) {
+            if ( CURLM_OK != curl_multi_add_handle(curlm, sreq->curlh().get()) ) {
                 throw exception("curly_hpp: failed to curl_multi_add_handle");
             }
 
             try {
-                handles.emplace(sreq->handle().get(), sreq);
+                handles.emplace(sreq->curlh().get(), sreq);
             } catch (...) {
-                curl_multi_remove_handle(curlm, sreq->handle().get());
+                curl_multi_remove_handle(curlm, sreq->curlh().get());
                 throw;
             }
 
