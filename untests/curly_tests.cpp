@@ -7,6 +7,7 @@
 #define CATCH_CONFIG_FAST_COMPILE
 #include <catch2/catch.hpp>
 
+#include <fstream>
 #include <iostream>
 
 #include <nlohmann/json.hpp>
@@ -402,10 +403,9 @@ TEST_CASE("curly_examples") {
             .send();
 
         auto response = request.get();
-        std::cout << "Status code: " << response.code() << std::endl;
         std::cout << "Body content: " << response.content().as_string_view() << std::endl;
+        std::cout << "Content Length: " << response.headers()["content-length"] << std::endl;
 
-        // Status code: 200
         // Body content: {
         //     "args": {},
         //     "data": "{\"hello\" : \"world\"}",
@@ -424,5 +424,77 @@ TEST_CASE("curly_examples") {
         //     "origin": "37.195.66.134, 37.195.66.134",
         //     "url": "https://www.httpbin.org/post"
         // }
+        // Content Length: 389
+    }
+
+    SECTION("Error Handling") {
+        auto request = net::request_builder()
+            .url("http://unavailable.site.com")
+            .send();
+
+        if ( request.wait() == net::request::statuses::done ) {
+            auto response = request.get();
+            std::cout << "Status code: " << response.code() << std::endl;
+        } else {
+            // throws net::exception because a response is unavailable
+            // auto response = request.get();
+
+            std::cout << "Error message: " << request.error() << std::endl;
+        }
+
+        // Error message: Couldn't resolve host name
+    }
+
+    SECTION("Streamed Requests") {
+        {
+            class file_dowloader : public net::download_handler {
+            public:
+                file_dowloader(const char* filename)
+                : stream_(filename, std::ofstream::binary) {}
+
+                std::size_t download(const char* src, std::size_t size) override {
+                    stream_.write(src, size);
+                    return size;
+                }
+            private:
+                std::ofstream stream_;
+            };
+
+            net::request_builder()
+                .url("https://httpbin.org/image/jpeg")
+                .downloader<file_dowloader>("image.jpeg")
+                .send().wait();
+        }
+        {
+            class file_uploader : public net::upload_handler {
+            public:
+                file_uploader(const char* filename)
+                : stream_(filename, std::ifstream::binary) {
+                    stream_.seekg(0, std::ios::end);
+                    available_ = static_cast<std::size_t>(stream_.tellg());
+                    stream_.seekg(0, std::ios::beg);
+                }
+
+                std::size_t size() const override {
+                    return available_;
+                }
+
+                std::size_t upload(char* dst, std::size_t size) override {
+                    std::size_t read_bytes = std::min(size, available_);
+                    stream_.read(dst, read_bytes);
+                    available_ -= read_bytes;
+                    return read_bytes;
+                }
+            private:
+                std::ifstream stream_;
+                std::size_t available_{0u};
+            };
+
+            net::request_builder()
+                .method(net::methods::post)
+                .url("https://httpbin.org/anything")
+                .uploader<file_uploader>("image.jpeg")
+                .send().wait();
+        }
     }
 }
