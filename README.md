@@ -25,6 +25,14 @@
 
 [curly]: https://github.com/BlackMATov/curly.hpp
 
+## Features
+
+- Custom headers
+- Asynchronous requests
+- PUT, GET, HEAD, POST methods
+- Custom uploading and downloading streams
+- Connection and last server response timeouts
+
 ## Installation
 
 Just add the root repository directory to your cmake project:
@@ -34,13 +42,11 @@ add_subdirectory(external/curly.hpp)
 target_link_libraries(your_project_target curly.hpp)
 ```
 
-## Features
+### CMake options
 
-- Custom headers
-- Asynchronous requests
-- PUT, GET, HEAD, POST methods
-- Custom uploading and downloading streams
-- Connection and last server response timeouts
+* `USE_STATIC_CRT` Use static C runtime library. Default: OFF
+* `USE_SYSTEM_CURL` Build with cURL from system paths. Default: OFF
+* `USE_EMBEDDED_CURL` Build with embedded cURL library. Default: ON
 
 ## Examples
 
