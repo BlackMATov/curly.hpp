@@ -55,10 +55,10 @@ endif()
 
 file(GLOB UNTESTS_SOURCES "*.cpp" "*.hpp")
 add_executable(${PROJECT_NAME} ${UNTESTS_SOURCES})
+
 target_link_libraries(${PROJECT_NAME}
-    Catch2
-    nlohmann_json
-    curly.hpp)
+    nlohmann_json Catch2 curly.hpp)
+
 target_compile_options(${PROJECT_NAME}
     PRIVATE
     $<$<CXX_COMPILER_ID:MSVC>:
@@ -66,4 +66,5 @@ target_compile_options(${PROJECT_NAME}
     PRIVATE
     $<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:
         -Wall -Wextra -Wpedantic>)
+
 add_test(${PROJECT_NAME} ${PROJECT_NAME})

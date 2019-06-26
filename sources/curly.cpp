@@ -13,6 +13,7 @@
 #include <mutex>
 #include <algorithm>
 #include <functional>
+#include <condition_variable>
 
 #include <curl/curl.h>
 

@@ -7,12 +7,21 @@ endif()
 
 project(curly.hpp)
 
+find_package(Threads REQUIRED)
+
 add_library(${PROJECT_NAME} STATIC
     headers/curly.hpp/curly.hpp
     sources/curly.cpp)
-target_include_directories(${PROJECT_NAME} PUBLIC headers)
-target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
-target_link_libraries(${PROJECT_NAME} PUBLIC curl)
+
+target_include_directories(${PROJECT_NAME}
+    PUBLIC headers)
+
+target_compile_features(${PROJECT_NAME}
+    PUBLIC cxx_std_17)
+
+target_link_libraries(${PROJECT_NAME}
+    PUBLIC curl
+    PUBLIC Threads::Threads)
 
 if(BUILD_AS_STANDALONE)
     option(BUILD_WITH_UNTESTS "Build with unit tests" ON)
