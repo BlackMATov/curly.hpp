@@ -7,7 +7,7 @@ endif()
 
 project(curly.hpp)
 
-find_package(Threads REQUIRED)
+option(CURLY_USE_SYSTEM_CURL "Link with cURL from system paths" ON)
 
 add_library(${PROJECT_NAME} STATIC
     headers/curly.hpp/curly.hpp
@@ -19,9 +19,22 @@ target_include_directories(${PROJECT_NAME}
 target_compile_features(${PROJECT_NAME}
     PUBLIC cxx_std_17)
 
-target_link_libraries(${PROJECT_NAME}
-    PUBLIC curl
-    PUBLIC Threads::Threads)
+target_compile_options(${PROJECT_NAME}
+    PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:
+        /W4>
+    PRIVATE
+    $<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:
+        -Wall -Wextra -Wpedantic>)
+
+find_package(Threads REQUIRED)
+target_link_libraries(${PROJECT_NAME} PUBLIC Threads::Threads)
+
+if(CURLY_USE_SYSTEM_CURL)
+    find_package(CURL REQUIRED)
+    target_link_libraries(${PROJECT_NAME} PUBLIC ${CURL_LIBRARIES})
+    target_include_directories(${PROJECT_NAME} PRIVATE ${CURL_INCLUDE_DIRS})
+endif()
 
 if(BUILD_AS_STANDALONE)
     option(BUILD_WITH_UNTESTS "Build with unit tests" ON)
