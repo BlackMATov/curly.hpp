@@ -811,9 +811,9 @@ namespace curly_hpp
             }
 
             const auto now = time_point_t::clock::now();
-            for ( const auto& [curl, sreq] : handles ) {
-                if ( sreq->check_response_timeout(now) ) {
-                    sreq->fail(CURLE_OPERATION_TIMEDOUT);
+            for ( const auto& iter_p : handles ) {
+                if ( iter_p.second->check_response_timeout(now) ) {
+                    iter_p.second->fail(CURLE_OPERATION_TIMEDOUT);
                 }
             }
 
