@@ -156,11 +156,8 @@ namespace
 
         ~curl_state() noexcept {
             std::lock_guard<std::mutex> guard(mutex_);
-            if ( curlm_ ) {
-                curl_multi_cleanup(curlm_);
-                curl_global_cleanup();
-                curlm_ = nullptr;
-            }
+            curl_multi_cleanup(curlm_);
+            curl_global_cleanup();
         }
     private:
         CURLM* curlm_{nullptr};
@@ -792,8 +789,11 @@ namespace curly_hpp
     void perform() {
         curl_state::with([](CURLM* curlm){
             int running_handles = 0;
-            curl_multi_perform(curlm, &running_handles);
-            if ( !running_handles || static_cast<std::size_t>(running_handles) != handles.size() ) {
+            if ( CURLM_OK != curl_multi_perform(curlm, &running_handles) ) {
+                throw exception("curly_hpp: failed to curl_multi_perform");
+            }
+
+            if ( static_cast<std::size_t>(running_handles) != handles.size() ) {
                 while ( true ) {
                     int msgs_in_queue = 0;
                     CURLMsg* msg = curl_multi_info_read(curlm, &msgs_in_queue);
@@ -833,7 +833,10 @@ namespace curly_hpp
 
     void wait_activity(time_ms_t ms) {
         curl_state::with([ms](CURLM* curlm){
-            curl_multi_wait(curlm, nullptr, 0, static_cast<int>(ms.count()), nullptr);
+            const int timeout_ms = static_cast<int>(ms.count());
+            if ( CURLM_OK != curl_multi_wait(curlm, nullptr, 0, timeout_ms, nullptr) ) {
+                throw exception("curly_hpp: failed to curl_multi_wait");
+            }
         });
     }
 }
