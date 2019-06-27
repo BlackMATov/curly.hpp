@@ -75,7 +75,7 @@ namespace
         return {result, &curl_slist_free_all};
     }
 
-    class default_uploader : public upload_handler {
+    class default_uploader final : public upload_handler {
     public:
         using data_t = std::vector<char>;
 
@@ -97,11 +97,11 @@ namespace
         }
     private:
         const data_t& data_;
-        std::size_t uploaded_{0};
         std::mutex& mutex_;
+        std::size_t uploaded_{0};
     };
 
-    class default_downloader : public download_handler {
+    class default_downloader final : public download_handler {
     public:
         using data_t = std::vector<char>;
 
@@ -130,7 +130,7 @@ namespace
 {
     using namespace curly_hpp;
 
-    class curl_state {
+    class curl_state final {
     public:
         template < typename F >
         static std::invoke_result_t<F, CURLM*> with(F&& f)
