@@ -29,9 +29,9 @@
 
 - Custom headers
 - Asynchronous requests
+- Different types of timeouts
 - PUT, GET, HEAD, POST methods
 - Custom uploading and downloading streams
-- Connection and last server response timeouts
 
 ## Installation
 

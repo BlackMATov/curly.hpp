@@ -21,13 +21,13 @@
 
 namespace curly_hpp
 {
-    class exception : public std::runtime_error {
+    class exception final : public std::runtime_error {
     public:
         explicit exception(const char* what);
         explicit exception(const std::string& what);
     };
 
-    struct icase_string_compare {
+    struct icase_string_compare final {
         using is_transparent = void;
         bool operator()(
             std::string_view l,
@@ -67,7 +67,7 @@ namespace curly_hpp
 
 namespace curly_hpp
 {
-    class content_t {
+    class content_t final {
     public:
         content_t() = default;
 
@@ -93,7 +93,7 @@ namespace curly_hpp
 
 namespace curly_hpp
 {
-    class response {
+    class response final {
     public:
         response() = default;
 
@@ -117,7 +117,7 @@ namespace curly_hpp
 
 namespace curly_hpp
 {
-    class request {
+    class request final {
     public:
         enum class statuses {
             done,
@@ -146,7 +146,7 @@ namespace curly_hpp
 
 namespace curly_hpp
 {
-    class request_builder {
+    class request_builder final {
     public:
         request_builder() = default;
 
@@ -167,6 +167,7 @@ namespace curly_hpp
         request_builder& verbose(bool v) noexcept;
         request_builder& verification(bool v) noexcept;
         request_builder& redirections(std::uint32_t r) noexcept;
+        request_builder& request_timeout(time_sec_t t) noexcept;
         request_builder& response_timeout(time_sec_t t) noexcept;
         request_builder& connection_timeout(time_sec_t t) noexcept;
 
@@ -182,6 +183,7 @@ namespace curly_hpp
         bool verbose() const noexcept;
         bool verification() const noexcept;
         std::uint32_t redirections() const noexcept;
+        time_sec_t request_timeout() const noexcept;
         time_sec_t response_timeout() const noexcept;
         time_sec_t connection_timeout() const noexcept;
 
@@ -198,12 +200,14 @@ namespace curly_hpp
 
         template < typename Uploader, typename... Args >
         request_builder& uploader(Args&&... args) {
-            return uploader(std::make_unique<Uploader>(std::forward<Args>(args)...));
+            return uploader(std::make_unique<Uploader>(
+                std::forward<Args>(args)...));
         }
 
         template < typename Downloader, typename... Args >
         request_builder& downloader(Args&&... args) {
-            return downloader(std::make_unique<Downloader>(std::forward<Args>(args)...));
+            return downloader(std::make_unique<Downloader>(
+                std::forward<Args>(args)...));
         }
     private:
         std::string url_;
@@ -212,6 +216,7 @@ namespace curly_hpp
         bool verbose_{false};
         bool verification_{false};
         std::uint32_t redirections_{10u};
+        time_sec_t request_timeout_{~0u};
         time_sec_t response_timeout_{60u};
         time_sec_t connection_timeout_{20u};
     private:
@@ -223,7 +228,7 @@ namespace curly_hpp
 
 namespace curly_hpp
 {
-    class auto_performer {
+    class auto_performer final {
     public:
         auto_performer();
         ~auto_performer() noexcept;

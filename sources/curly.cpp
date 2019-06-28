@@ -75,7 +75,7 @@ namespace
         return {result, &curl_slist_free_all};
     }
 
-    class default_uploader : public upload_handler {
+    class default_uploader final : public upload_handler {
     public:
         using data_t = std::vector<char>;
 
@@ -97,11 +97,11 @@ namespace
         }
     private:
         const data_t& data_;
-        std::size_t uploaded_{0};
         std::mutex& mutex_;
+        std::size_t uploaded_{0};
     };
 
-    class default_downloader : public download_handler {
+    class default_downloader final : public download_handler {
     public:
         using data_t = std::vector<char>;
 
@@ -130,7 +130,7 @@ namespace
 {
     using namespace curly_hpp;
 
-    class curl_state {
+    class curl_state final {
     public:
         template < typename F >
         static std::invoke_result_t<F, CURLM*> with(F&& f)
@@ -156,11 +156,8 @@ namespace
 
         ~curl_state() noexcept {
             std::lock_guard<std::mutex> guard(mutex_);
-            if ( curlm_ ) {
-                curl_multi_cleanup(curlm_);
-                curl_global_cleanup();
-                curlm_ = nullptr;
-            }
+            curl_multi_cleanup(curlm_);
+            curl_global_cleanup();
         }
     private:
         CURLM* curlm_{nullptr};
@@ -344,6 +341,9 @@ namespace curly_hpp
                 curl_easy_setopt(curlh_.get(), CURLOPT_FOLLOWLOCATION, 0l);
             }
 
+            curl_easy_setopt(curlh_.get(), CURLOPT_TIMEOUT,
+                static_cast<long>(std::max(time_sec_t(1), rb.request_timeout()).count()));
+
             curl_easy_setopt(curlh_.get(), CURLOPT_CONNECTTIMEOUT,
                 static_cast<long>(std::max(time_sec_t(1), rb.connection_timeout()).count()));
 
@@ -393,9 +393,19 @@ namespace curly_hpp
                 return false;
             }
 
-            status_ = (err == CURLE_OPERATION_TIMEDOUT)
-                ? statuses::timeout
-                : statuses::failed;
+            switch ( err ) {
+            case CURLE_OPERATION_TIMEDOUT:
+                status_ = statuses::timeout;
+                break;
+            case CURLE_READ_ERROR:
+            case CURLE_WRITE_ERROR:
+            case CURLE_ABORTED_BY_CALLBACK:
+                status_ = statuses::canceled;
+                break;
+            default:
+                status_ = statuses::failed;
+                break;
+            }
 
             try {
                 error_ = curl_easy_strerror(err);
@@ -632,6 +642,11 @@ namespace curly_hpp
         return *this;
     }
 
+    request_builder& request_builder::request_timeout(time_sec_t t) noexcept {
+        request_timeout_ = t;
+        return *this;
+    }
+
     request_builder& request_builder::response_timeout(time_sec_t t) noexcept {
         response_timeout_ = t;
         return *this;
@@ -684,6 +699,10 @@ namespace curly_hpp
 
     std::uint32_t request_builder::redirections() const noexcept {
         return redirections_;
+    }
+
+    time_sec_t request_builder::request_timeout() const noexcept {
+        return request_timeout_;
     }
 
     time_sec_t request_builder::response_timeout() const noexcept {
@@ -792,8 +811,11 @@ namespace curly_hpp
     void perform() {
         curl_state::with([](CURLM* curlm){
             int running_handles = 0;
-            curl_multi_perform(curlm, &running_handles);
-            if ( !running_handles || static_cast<std::size_t>(running_handles) != handles.size() ) {
+            if ( CURLM_OK != curl_multi_perform(curlm, &running_handles) ) {
+                throw exception("curly_hpp: failed to curl_multi_perform");
+            }
+
+            if ( static_cast<std::size_t>(running_handles) != handles.size() ) {
                 while ( true ) {
                     int msgs_in_queue = 0;
                     CURLMsg* msg = curl_multi_info_read(curlm, &msgs_in_queue);
@@ -833,7 +855,10 @@ namespace curly_hpp
 
     void wait_activity(time_ms_t ms) {
         curl_state::with([ms](CURLM* curlm){
-            curl_multi_wait(curlm, nullptr, 0, static_cast<int>(ms.count()), nullptr);
+            const int timeout_ms = static_cast<int>(ms.count());
+            if ( CURLM_OK != curl_multi_wait(curlm, nullptr, 0, timeout_ms, nullptr) ) {
+                throw exception("curly_hpp: failed to curl_multi_wait");
+            }
         });
     }
 }
