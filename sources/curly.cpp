@@ -390,9 +390,19 @@ namespace curly_hpp
                 return false;
             }
 
-            status_ = (err == CURLE_OPERATION_TIMEDOUT)
-                ? statuses::timeout
-                : statuses::failed;
+            switch ( err ) {
+            case CURLE_OPERATION_TIMEDOUT:
+                status_ = statuses::timeout;
+                break;
+            case CURLE_READ_ERROR:
+            case CURLE_WRITE_ERROR:
+            case CURLE_ABORTED_BY_CALLBACK:
+                status_ = statuses::canceled;
+                break;
+            default:
+                status_ = statuses::failed;
+                break;
+            }
 
             try {
                 error_ = curl_easy_strerror(err);

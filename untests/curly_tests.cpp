@@ -4,10 +4,10 @@
  * Copyright (C) 2019, by Matvey Cherevko (blackmatov@gmail.com)
  ******************************************************************************/
 
-#define CATCH_CONFIG_FAST_COMPILE
 #include <catch2/catch.hpp>
 
 #include <fstream>
+#include <utility>
 #include <iostream>
 
 #include <rapidjson/document.h>
@@ -29,29 +29,29 @@ namespace
         return d;
     }
 
-    class verbose_uploader : public net::upload_handler {
+    class canceled_uploader : public net::upload_handler {
     public:
-        verbose_uploader() = default;
+        canceled_uploader() = default;
 
         std::size_t size() const override {
-            return 0;
+            return 10;
         }
 
         std::size_t read(char* dst, std::size_t size) override {
             (void)dst;
-            std::cout << "---------- ** UPLOAD (" << size << ") ** ---------- " << std::endl;
-            return size;
+            (void)size;
+            throw std::exception();
         }
     };
 
-    class verbose_downloader : public net::download_handler {
+    class canceled_downloader : public net::download_handler {
     public:
-        verbose_downloader() = default;
+        canceled_downloader() = default;
 
         std::size_t write(const char* src, std::size_t size) override {
             (void)src;
-            std::cout << "---------- ** DOWNLOAD (" << size << ") ** ---------- " << std::endl;
-            return size;
+            (void)size;
+            throw std::exception();
         }
     };
 }
@@ -229,11 +229,13 @@ TEST_CASE("curly") {
             .url("https://httpbin.org/headers")
             .header("Custom-Header-1", "custom_header_value_1")
             .header("Custom-Header-2", "custom header value 2")
+            .header("Custom-Header-3", std::string())
             .send();
         const auto resp = req.get();
         const auto content_j = json_parse(resp.content.as_string_view());
         REQUIRE(content_j["headers"]["Custom-Header-1"] == "custom_header_value_1");
         REQUIRE(content_j["headers"]["Custom-Header-2"] == "custom header value 2");
+        REQUIRE(content_j["headers"]["Custom-Header-3"] == "");
     }
 
     SECTION("response_inspection") {
@@ -253,7 +255,7 @@ TEST_CASE("curly") {
                 .method(net::methods::post)
                 .send();
             const auto resp = req.get();
-            const auto content_j = json_parse(resp.content.as_string_view());
+            const auto content_j = json_parse(resp.content.as_string_copy());
             REQUIRE(content_j["hello"] == "world");
             REQUIRE(content_j["world"] == "hello");
         }
@@ -296,7 +298,9 @@ TEST_CASE("curly") {
             REQUIRE(resp.headers.count("Content-Type"));
             REQUIRE(resp.headers.at("Content-Type") == "image/png");
             REQUIRE(untests::png_data_length == resp.content.size());
-            REQUIRE(!std::memcmp(resp.content.data().data(), untests::png_data, untests::png_data_length));
+            REQUIRE(!std::memcmp(
+                std::move(resp.content).data().data(),
+                untests::png_data, untests::png_data_length));
         }
         {
             auto resp = net::request_builder()
@@ -307,31 +311,69 @@ TEST_CASE("curly") {
             REQUIRE(resp.headers.count("Content-Type"));
             REQUIRE(resp.headers.at("Content-Type") == "image/jpeg");
             REQUIRE(untests::jpeg_data_length == resp.content.size());
-            REQUIRE(!std::memcmp(resp.content.data().data(), untests::jpeg_data, untests::jpeg_data_length));
+            REQUIRE(!std::memcmp(
+                std::as_const(resp.content).data().data(),
+                untests::jpeg_data, untests::jpeg_data_length));
         }
     }
 
     SECTION("redirects") {
         {
-            auto req = net::request_builder()
-                .url("https://httpbin.org/redirect/2")
-                .method(net::methods::get)
-                .send();
-            REQUIRE(req.get().code() == 200u);
+            {
+                auto req = net::request_builder()
+                    .url("https://httpbin.org/redirect/2")
+                    .method(net::methods::get)
+                    .send();
+                REQUIRE(req.get().code() == 200u);
+            }
+            {
+                auto req = net::request_builder()
+                    .url("https://httpbin.org/absolute-redirect/2")
+                    .method(net::methods::get)
+                    .send();
+                REQUIRE(req.get().code() == 200u);
+            }
+            {
+                auto req = net::request_builder()
+                    .url("https://httpbin.org/relative-redirect/2")
+                    .method(net::methods::get)
+                    .send();
+                REQUIRE(req.get().code() == 200u);
+            }
         }
         {
-            auto req = net::request_builder()
-                .url("https://httpbin.org/absolute-redirect/2")
-                .method(net::methods::get)
-                .send();
-            REQUIRE(req.get().code() == 200u);
-        }
-        {
-            auto req = net::request_builder()
-                .url("https://httpbin.org/relative-redirect/2")
-                .method(net::methods::get)
-                .send();
-            REQUIRE(req.get().code() == 200u);
+            {
+                auto req = net::request_builder()
+                    .url("https://httpbin.org/redirect/3")
+                    .method(net::methods::get)
+                    .redirections(0)
+                    .send();
+                REQUIRE(req.get().code() == 302u);
+            }
+            {
+                auto req = net::request_builder()
+                    .url("https://httpbin.org/redirect/3")
+                    .method(net::methods::get)
+                    .redirections(1)
+                    .send();
+                REQUIRE(req.wait() == net::request::statuses::failed);
+            }
+            {
+                auto req = net::request_builder()
+                    .url("https://httpbin.org/redirect/3")
+                    .method(net::methods::get)
+                    .redirections(2)
+                    .send();
+                REQUIRE(req.wait() == net::request::statuses::failed);
+            }
+            {
+                auto req = net::request_builder()
+                    .url("https://httpbin.org/redirect/3")
+                    .method(net::methods::get)
+                    .redirections(3)
+                    .send();
+                REQUIRE(req.get().code() == 200u);
+            }
         }
     }
 
@@ -419,6 +461,23 @@ TEST_CASE("curly") {
                 .verification(false)
                 .send();
             REQUIRE(req3.wait() == net::request::statuses::done);
+        }
+    }
+
+    SECTION("canceled_handlers") {
+        {
+            auto req = net::request_builder("https://httpbin.org/anything")
+                .method(net::methods::post)
+                .uploader<canceled_uploader>()
+                .send();
+            REQUIRE(req.wait() == net::request::statuses::canceled);
+        }
+        {
+            auto req = net::request_builder("https://httpbin.org/anything")
+                .method(net::methods::get)
+                .downloader<canceled_downloader>()
+                .send();
+            REQUIRE(req.wait() == net::request::statuses::canceled);
         }
     }
 }
