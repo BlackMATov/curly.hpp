@@ -341,6 +341,9 @@ namespace curly_hpp
                 curl_easy_setopt(curlh_.get(), CURLOPT_FOLLOWLOCATION, 0l);
             }
 
+            curl_easy_setopt(curlh_.get(), CURLOPT_TIMEOUT,
+                static_cast<long>(std::max(time_sec_t(1), rb.request_timeout()).count()));
+
             curl_easy_setopt(curlh_.get(), CURLOPT_CONNECTTIMEOUT,
                 static_cast<long>(std::max(time_sec_t(1), rb.connection_timeout()).count()));
 
@@ -639,6 +642,11 @@ namespace curly_hpp
         return *this;
     }
 
+    request_builder& request_builder::request_timeout(time_sec_t t) noexcept {
+        request_timeout_ = t;
+        return *this;
+    }
+
     request_builder& request_builder::response_timeout(time_sec_t t) noexcept {
         response_timeout_ = t;
         return *this;
@@ -691,6 +699,10 @@ namespace curly_hpp
 
     std::uint32_t request_builder::redirections() const noexcept {
         return redirections_;
+    }
+
+    time_sec_t request_builder::request_timeout() const noexcept {
+        return request_timeout_;
     }
 
     time_sec_t request_builder::response_timeout() const noexcept {

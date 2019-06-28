@@ -58,6 +58,7 @@ namespace
 
 TEST_CASE("curly") {
     net::auto_performer performer;
+    performer.wait_activity(net::time_ms_t(10));
 
     SECTION("wait") {
         auto req = net::request_builder("https://httpbin.org/delay/1").send();
@@ -271,20 +272,34 @@ TEST_CASE("curly") {
             REQUIRE(req.error().empty());
         }
         {
-            auto req = net::request_builder()
+            auto req0 = net::request_builder()
+                .url("https://httpbin.org/delay/10")
+                .request_timeout(net::time_sec_t(0))
+                .send();
+            REQUIRE(req0.wait() == net::request::statuses::timeout);
+            REQUIRE_FALSE(req0.error().empty());
+
+            auto req1 = net::request_builder()
                 .url("https://httpbin.org/delay/10")
                 .response_timeout(net::time_sec_t(0))
                 .send();
-            REQUIRE(req.wait() == net::request::statuses::timeout);
-            REQUIRE_FALSE(req.error().empty());
+            REQUIRE(req1.wait() == net::request::statuses::timeout);
+            REQUIRE_FALSE(req1.error().empty());
         }
         {
-            auto req = net::request_builder()
+            auto req0 = net::request_builder()
+                .url("https://httpbin.org/delay/10")
+                .request_timeout(net::time_sec_t(1))
+                .send();
+            REQUIRE(req0.wait() == net::request::statuses::timeout);
+            REQUIRE_FALSE(req0.error().empty());
+
+            auto req1 = net::request_builder()
                 .url("https://httpbin.org/delay/10")
                 .response_timeout(net::time_sec_t(1))
                 .send();
-            REQUIRE(req.wait() == net::request::statuses::timeout);
-            REQUIRE_FALSE(req.error().empty());
+            REQUIRE(req1.wait() == net::request::statuses::timeout);
+            REQUIRE_FALSE(req1.error().empty());
         }
     }
 
@@ -467,6 +482,7 @@ TEST_CASE("curly") {
     SECTION("canceled_handlers") {
         {
             auto req = net::request_builder("https://httpbin.org/anything")
+                .verbose(true)
                 .method(net::methods::post)
                 .uploader<canceled_uploader>()
                 .send();
@@ -474,6 +490,7 @@ TEST_CASE("curly") {
         }
         {
             auto req = net::request_builder("https://httpbin.org/anything")
+                .verbose(true)
                 .method(net::methods::get)
                 .downloader<canceled_downloader>()
                 .send();
