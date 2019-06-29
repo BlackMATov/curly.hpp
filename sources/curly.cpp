@@ -483,6 +483,16 @@ namespace curly_hpp
             return status_;
         }
 
+        bool is_ready() const noexcept {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return status_ != statuses::pending;
+        }
+
+        bool is_running() const noexcept {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return status_ == statuses::pending;
+        }
+
         statuses status() const noexcept {
             std::lock_guard<std::mutex> guard(mutex_);
             return status_;
@@ -628,6 +638,14 @@ namespace curly_hpp
 
     request::statuses request::status() const noexcept {
         return state_->status();
+    }
+
+    bool request::is_ready() const noexcept {
+        return state_->is_ready();
+    }
+
+    bool request::is_running() const noexcept {
+        return state_->is_running();
     }
 
     response request::get() {
@@ -888,7 +906,7 @@ namespace curly_hpp
             }
 
             for ( auto iter = active_handles.begin(); iter != active_handles.end(); ) {
-                if ( (*iter)->status() != request::statuses::pending ) {
+                if ( (*iter)->is_ready() ) {
                     curl_multi_remove_handle(curlm, (*iter)->curlh().get());
                     iter = active_handles.erase(iter);
                 } else {
