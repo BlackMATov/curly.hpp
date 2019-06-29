@@ -11,6 +11,7 @@
 #include <cstring>
 
 #include <mutex>
+#include <queue>
 #include <algorithm>
 #include <functional>
 #include <condition_variable>
@@ -97,6 +98,38 @@ namespace
 namespace
 {
     using namespace curly_hpp;
+
+    template < typename T >
+    class mt_queue final {
+    public:
+        void enqueue(T v) {
+            std::lock_guard<std::mutex> guard(mutex_);
+            queue_.push(std::move(v));
+            cvar_.notify_all();
+        }
+
+        bool try_dequeue(T& v) {
+            std::lock_guard<std::mutex> guard(mutex_);
+            if ( queue_.empty() ) {
+                return false;
+            }
+            v = queue_.front();
+            queue_.pop();
+            return true;
+        }
+
+        void wait_content_for(time_ms_t ms) const noexcept {
+            std::unique_lock<std::mutex> lock(mutex_);
+            cvar_.wait_for(lock, ms, [this](){
+                return !queue_.empty();
+            });
+        }
+    private:
+        std::queue<T> queue_;
+    private:
+        mutable std::mutex mutex_;
+        mutable std::condition_variable cvar_;
+    };
 
     slist_t make_header_slist(const headers_t& headers) {
         std::string header_builder;
