@@ -27,7 +27,7 @@
 
 // -----------------------------------------------------------------------------
 //
-// utils
+// types
 //
 // -----------------------------------------------------------------------------
 
@@ -35,45 +35,13 @@ namespace
 {
     using namespace curly_hpp;
 
-    using slist_t = std::unique_ptr<
-        curl_slist,
-        void(*)(curl_slist*)>;
-
     using curlh_t = std::unique_ptr<
         CURL,
         void(*)(CURL*)>;
 
-    using req_state_t = std::shared_ptr<request::internal_state>;
-    std::map<CURL*, req_state_t> handles;
-
-    slist_t make_header_slist(const headers_t& headers) {
-        std::string header_builder;
-        curl_slist* result = nullptr;
-        for ( const auto& [key,value] : headers ) {
-            if ( key.empty() ) {
-                continue;
-            }
-            try {
-                header_builder.clear();
-                header_builder.append(key);
-                if ( !value.empty() ) {
-                    header_builder.append(": ");
-                    header_builder.append(value);
-                } else {
-                    header_builder.append(";");
-                }
-                curl_slist* tmp_result = curl_slist_append(result, header_builder.c_str());
-                if ( !tmp_result ) {
-                    throw exception("curly_hpp: failed to curl_slist_append");
-                }
-                result = tmp_result;
-            } catch (...) {
-                curl_slist_free_all(result);
-                throw;
-            }
-        }
-        return {result, &curl_slist_free_all};
-    }
+    using slist_t = std::unique_ptr<
+        curl_slist,
+        void(*)(curl_slist*)>;
 
     class default_uploader final : public upload_handler {
     public:
@@ -122,13 +90,56 @@ namespace
 
 // -----------------------------------------------------------------------------
 //
-// curl_state
+// utils
 //
 // -----------------------------------------------------------------------------
 
 namespace
 {
     using namespace curly_hpp;
+
+    slist_t make_header_slist(const headers_t& headers) {
+        std::string header_builder;
+        curl_slist* result = nullptr;
+        for ( const auto& [key,value] : headers ) {
+            if ( key.empty() ) {
+                continue;
+            }
+            try {
+                header_builder.clear();
+                header_builder.append(key);
+                if ( !value.empty() ) {
+                    header_builder.append(": ");
+                    header_builder.append(value);
+                } else {
+                    header_builder.append(";");
+                }
+                curl_slist* tmp_result = curl_slist_append(result, header_builder.c_str());
+                if ( !tmp_result ) {
+                    throw exception("curly_hpp: failed to curl_slist_append");
+                }
+                result = tmp_result;
+            } catch (...) {
+                curl_slist_free_all(result);
+                throw;
+            }
+        }
+        return {result, &curl_slist_free_all};
+    }
+}
+
+// -----------------------------------------------------------------------------
+//
+// state
+//
+// -----------------------------------------------------------------------------
+
+namespace
+{
+    using namespace curly_hpp;
+
+    using req_state_t = std::shared_ptr<request::internal_state>;
+    std::vector<req_state_t> active_handles;
 
     class curl_state final {
     public:
@@ -287,6 +298,7 @@ namespace curly_hpp
             }
 
             curl_easy_setopt(curlh_.get(), CURLOPT_NOSIGNAL, 1l);
+            curl_easy_setopt(curlh_.get(), CURLOPT_PRIVATE, this);
             curl_easy_setopt(curlh_.get(), CURLOPT_TCP_KEEPALIVE, 1l);
             curl_easy_setopt(curlh_.get(), CURLOPT_BUFFERSIZE, 65536l);
             curl_easy_setopt(curlh_.get(), CURLOPT_USE_SSL, CURLUSESSL_ALL);
@@ -364,7 +376,7 @@ namespace curly_hpp
                 &code) || !code )
             {
                 status_ = statuses::failed;
-                cond_var_.notify_all();
+                cvar_.notify_all();
                 return false;
             }
 
@@ -376,14 +388,14 @@ namespace curly_hpp
                 response_.downloader = std::move(downloader_);
             } catch (...) {
                 status_ = statuses::failed;
-                cond_var_.notify_all();
+                cvar_.notify_all();
                 return false;
             }
 
             status_ = statuses::done;
             error_.clear();
 
-            cond_var_.notify_all();
+            cvar_.notify_all();
             return true;
         }
 
@@ -413,7 +425,7 @@ namespace curly_hpp
                 // nothing
             }
 
-            cond_var_.notify_all();
+            cvar_.notify_all();
             return true;
         }
 
@@ -426,13 +438,13 @@ namespace curly_hpp
             status_ = statuses::canceled;
             error_.clear();
 
-            cond_var_.notify_all();
+            cvar_.notify_all();
             return true;
         }
 
         statuses wait() const noexcept {
             std::unique_lock<std::mutex> lock(mutex_);
-            cond_var_.wait(lock, [this](){
+            cvar_.wait(lock, [this](){
                 return status_ != statuses::pending;
             });
             return status_;
@@ -445,7 +457,7 @@ namespace curly_hpp
 
         response get() {
             std::unique_lock<std::mutex> lock(mutex_);
-            cond_var_.wait(lock, [this](){
+            cvar_.wait(lock, [this](){
                 return status_ != statuses::pending;
             });
             if ( status_ != statuses::done ) {
@@ -457,7 +469,7 @@ namespace curly_hpp
 
         const std::string& error() const noexcept {
             std::unique_lock<std::mutex> lock(mutex_);
-            cond_var_.wait(lock, [this](){
+            cvar_.wait(lock, [this](){
                 return status_ != statuses::pending;
             });
             return error_;
@@ -562,7 +574,7 @@ namespace curly_hpp
         std::string error_{"Unknown error"};
     private:
         mutable std::mutex mutex_;
-        mutable std::condition_variable cond_var_;
+        mutable std::condition_variable cvar_;
     };
 }
 
@@ -756,7 +768,7 @@ namespace curly_hpp
             }
 
             try {
-                handles.emplace(sreq->curlh().get(), sreq);
+                active_handles.emplace_back(sreq);
             } catch (...) {
                 curl_multi_remove_handle(curlm, sreq->curlh().get());
                 throw;
@@ -815,37 +827,37 @@ namespace curly_hpp
                 throw exception("curly_hpp: failed to curl_multi_perform");
             }
 
-            if ( static_cast<std::size_t>(running_handles) != handles.size() ) {
-                while ( true ) {
-                    int msgs_in_queue = 0;
-                    CURLMsg* msg = curl_multi_info_read(curlm, &msgs_in_queue);
-                    if ( !msg ) {
-                        break;
-                    }
-                    if ( msg->msg == CURLMSG_DONE ) {
-                        const auto iter = handles.find(msg->easy_handle);
-                        if ( iter != handles.end() ) {
-                            if ( msg->data.result == CURLE_OK ) {
-                                iter->second->done();
-                            } else {
-                                iter->second->fail(msg->data.result);
-                            }
-                        }
+            while ( true ) {
+                int msgs_in_queue = 0;
+                CURLMsg* msg = curl_multi_info_read(curlm, &msgs_in_queue);
+                if ( !msg ) {
+                    break;
+                }
+                if ( msg->msg != CURLMSG_DONE ) {
+                    continue;
+                }
+                void* priv_ptr = nullptr;
+                curl_easy_getinfo(msg->easy_handle, CURLINFO_PRIVATE, &priv_ptr);
+                if ( auto sreq = static_cast<req_state_t::element_type*>(priv_ptr); sreq ) {
+                    if ( msg->data.result == CURLcode::CURLE_OK ) {
+                        sreq->done();
+                    } else {
+                        sreq->fail(msg->data.result);
                     }
                 }
             }
 
             const auto now = time_point_t::clock::now();
-            for ( const auto& iter_p : handles ) {
-                if ( iter_p.second->check_response_timeout(now) ) {
-                    iter_p.second->fail(CURLE_OPERATION_TIMEDOUT);
+            for ( const auto& sreq : active_handles ) {
+                if ( sreq->check_response_timeout(now) ) {
+                    sreq->fail(CURLE_OPERATION_TIMEDOUT);
                 }
             }
 
-            for ( auto iter = handles.begin(); iter != handles.end(); ) {
-                if ( iter->second->status() != request::statuses::pending ) {
-                    curl_multi_remove_handle(curlm, iter->first);
-                    iter = handles.erase(iter);
+            for ( auto iter = active_handles.begin(); iter != active_handles.end(); ) {
+                if ( (*iter)->status() != request::statuses::pending ) {
+                    curl_multi_remove_handle(curlm, (*iter)->curlh().get());
+                    iter = active_handles.erase(iter);
                 } else {
                     ++iter;
                 }
