@@ -61,13 +61,29 @@ TEST_CASE("curly") {
     performer.wait_activity(net::time_ms_t(10));
 
     SECTION("wait") {
-        auto req = net::request_builder("https://httpbin.org/delay/1").send();
-        REQUIRE(req.status() == net::request::statuses::pending);
-        REQUIRE(req.wait() == net::request::statuses::done);
-        REQUIRE(req.status() == net::request::statuses::done);
-        auto resp = req.get();
-        REQUIRE(resp.code() == 200u);
-        REQUIRE(req.status() == net::request::statuses::empty);
+        {
+            auto req = net::request_builder("https://httpbin.org/delay/1").send();
+            REQUIRE(req.status() == net::request::statuses::pending);
+            REQUIRE(req.wait() == net::request::statuses::done);
+            REQUIRE(req.status() == net::request::statuses::done);
+            auto resp = req.get();
+            REQUIRE(resp.code() == 200u);
+            REQUIRE(req.status() == net::request::statuses::empty);
+        }
+        {
+            auto req = net::request_builder("https://httpbin.org/delay/2").send();
+            REQUIRE(req.wait_for(net::time_sec_t(1)) == net::request::statuses::pending);
+            REQUIRE(req.wait_for(net::time_sec_t(5)) == net::request::statuses::done);
+            REQUIRE(req.get().code() == 200u);
+        }
+        {
+            auto req = net::request_builder("https://httpbin.org/delay/2").send();
+            REQUIRE(req.wait_until(net::time_point_t::clock::now() + net::time_sec_t(1))
+                == net::request::statuses::pending);
+            REQUIRE(req.wait_until(net::time_point_t::clock::now() + net::time_sec_t(5))
+                == net::request::statuses::done);
+            REQUIRE(req.get().code() == 200u);
+        }
     }
 
     SECTION("error") {

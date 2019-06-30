@@ -505,6 +505,11 @@ namespace curly_hpp
             return true;
         }
 
+        statuses status() const noexcept {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return status_;
+        }
+
         statuses wait() const noexcept {
             std::unique_lock<std::mutex> lock(mutex_);
             cvar_.wait(lock, [this](){
@@ -513,8 +518,19 @@ namespace curly_hpp
             return status_;
         }
 
-        statuses status() const noexcept {
-            std::lock_guard<std::mutex> guard(mutex_);
+        statuses wait_for(time_ms_t ms) const noexcept {
+            std::unique_lock<std::mutex> lock(mutex_);
+            cvar_.wait_for(lock, ms, [this](){
+                return status_ != statuses::pending;
+            });
+            return status_;
+        }
+
+        statuses wait_until(time_point_t tp) const noexcept {
+            std::unique_lock<std::mutex> lock(mutex_);
+            cvar_.wait_until(lock, tp, [this](){
+                return status_ != statuses::pending;
+            });
             return status_;
         }
 
@@ -645,12 +661,20 @@ namespace curly_hpp
         return state_->cancel();
     }
 
+    request::statuses request::status() const noexcept {
+        return state_->status();
+    }
+
     request::statuses request::wait() const noexcept {
         return state_->wait();
     }
 
-    request::statuses request::status() const noexcept {
-        return state_->status();
+    request::statuses request::wait_for(time_ms_t ms) const noexcept {
+        return state_->wait_for(ms);
+    }
+
+    request::statuses request::wait_until(time_point_t tp) const noexcept {
+        return state_->wait_until(tp);
     }
 
     response request::get() {
