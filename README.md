@@ -141,7 +141,7 @@ if ( request.wait() == net::request::statuses::done ) {
     // throws net::exception because a response is unavailable
     // auto response = request.get();
 
-    std::cout << "Error message: " << request.error() << std::endl;
+    std::cout << "Error message: " << request.get_error() << std::endl;
 }
 
 // Error message: Couldn't resolve host name
