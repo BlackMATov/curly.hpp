@@ -297,11 +297,11 @@ namespace curly_hpp
 
 namespace curly_hpp
 {
-    response::response(response_code_t rc) noexcept
-    : code_(rc) {}
+    response::response(http_code_t c) noexcept
+    : http_code_(c) {}
 
-    response_code_t response::code() const noexcept {
-        return code_;
+    http_code_t response::http_code() const noexcept {
+        return http_code_;
     }
 }
 
@@ -443,7 +443,7 @@ namespace curly_hpp
             }
 
             try {
-                response_ = response(static_cast<response_code_t>(code));
+                response_ = response(static_cast<http_code_t>(code));
                 response_.content = std::move(response_content_);
                 response_.headers = std::move(response_headers_);
                 response_.uploader = std::move(breq_.uploader());

@@ -74,7 +74,7 @@ auto request = net::request_builder()
 auto response = request.get();
 
 // prints results
-std::cout << "Status code: " << response.code() << std::endl;
+std::cout << "Status code: " << response.http_code() << std::endl;
 std::cout << "Content type: " << response.headers["content-type"] << std::endl;
 std::cout << "Body content: " << response.content.as_string_view() << std::endl;
 
@@ -136,7 +136,7 @@ auto request = net::request_builder()
 
 if ( request.wait() == net::request::statuses::done ) {
     auto response = request.get();
-    std::cout << "Status code: " << response.code() << std::endl;
+    std::cout << "Status code: " << response.http_code() << std::endl;
 } else {
     // throws net::exception because a response is unavailable
     // auto response = request.get();

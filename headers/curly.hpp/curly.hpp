@@ -42,7 +42,7 @@ namespace curly_hpp
         post
     };
 
-    using response_code_t = std::uint16_t;
+    using http_code_t = std::uint16_t;
     using headers_t = std::map<std::string, std::string, icase_string_compare>;
 
     using time_sec_t = std::chrono::seconds;
@@ -107,15 +107,15 @@ namespace curly_hpp
         response(const response&) = delete;
         response& operator=(const response&) = delete;
 
-        explicit response(response_code_t rc) noexcept;
-        response_code_t code() const noexcept;
+        explicit response(http_code_t c) noexcept;
+        http_code_t http_code() const noexcept;
     public:
         content_t content;
         headers_t headers;
         uploader_uptr uploader;
         downloader_uptr downloader;
     private:
-        response_code_t code_{0u};
+        http_code_t http_code_{0u};
     };
 }
 
