@@ -13,7 +13,6 @@
 #include <mutex>
 #include <queue>
 #include <algorithm>
-#include <functional>
 #include <condition_variable>
 
 #ifndef NOMINMAX
@@ -759,6 +758,11 @@ namespace curly_hpp
         return *this;
     }
 
+    request_builder& request_builder::callback(callback_t c) noexcept {
+        callback_ = std::move(c);
+        return *this;
+    }
+
     request_builder& request_builder::uploader(uploader_uptr u) noexcept {
         uploader_ = std::move(u);
         return *this;
@@ -811,6 +815,14 @@ namespace curly_hpp
 
     const content_t& request_builder::content() const noexcept {
         return content_;
+    }
+
+    callback_t& request_builder::callback() noexcept {
+        return callback_;
+    }
+
+    const callback_t& request_builder::callback() const noexcept {
+        return callback_;
     }
 
     uploader_uptr& request_builder::uploader() noexcept {
