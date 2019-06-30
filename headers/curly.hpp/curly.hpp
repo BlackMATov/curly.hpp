@@ -137,6 +137,9 @@ namespace curly_hpp
         statuses wait() const noexcept;
         statuses status() const noexcept;
 
+        bool is_ready() const noexcept;
+        bool is_running() const noexcept;
+
         response get();
         const std::string& error() const noexcept;
     private:

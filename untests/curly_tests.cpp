@@ -93,6 +93,23 @@ TEST_CASE("curly") {
         }
     }
 
+    SECTION("is_ready/is_running") {
+        {
+            auto req = net::request_builder("https://httpbin.org/delay/1").send();
+            REQUIRE(req.is_running());
+            REQUIRE_FALSE(req.is_ready());
+            REQUIRE(req.cancel());
+            REQUIRE_FALSE(req.is_running());
+            REQUIRE(req.is_ready());
+        }
+        {
+            auto req = net::request_builder("https://httpbin.org/status/200").send();
+            REQUIRE(req.wait() == net::request::statuses::done);
+            REQUIRE(req.is_ready());
+            REQUIRE_FALSE(req.is_running());
+        }
+    }
+
     SECTION("get") {
         {
             auto req = net::request_builder("https://httpbin.org/status/204").send();
