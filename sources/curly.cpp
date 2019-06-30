@@ -11,6 +11,7 @@
 #include <cstring>
 
 #include <mutex>
+#include <queue>
 #include <algorithm>
 #include <functional>
 #include <condition_variable>
@@ -27,6 +28,70 @@
 
 // -----------------------------------------------------------------------------
 //
+// types
+//
+// -----------------------------------------------------------------------------
+
+namespace
+{
+    using namespace curly_hpp;
+
+    using curlh_t = std::unique_ptr<
+        CURL,
+        void(*)(CURL*)>;
+
+    using slist_t = std::unique_ptr<
+        curl_slist,
+        void(*)(curl_slist*)>;
+
+    class default_uploader final : public upload_handler {
+    public:
+        using data_t = std::vector<char>;
+
+        default_uploader(const data_t* src, std::mutex* m) noexcept
+        : data_(*src)
+        , mutex_(*m)
+        , size_(src->size()) {}
+
+        std::size_t size() const override {
+            return size_.load();
+        }
+
+        std::size_t read(char* dst, std::size_t size) override {
+            std::lock_guard<std::mutex> guard(mutex_);
+            assert(size <= data_.size() - uploaded_);
+            std::memcpy(dst, data_.data() + uploaded_, size);
+            uploaded_ += size;
+            return size;
+        }
+    private:
+        const data_t& data_;
+        std::mutex& mutex_;
+        std::size_t uploaded_{0};
+        const std::atomic_size_t size_{0};
+    };
+
+    class default_downloader final : public download_handler {
+    public:
+        using data_t = std::vector<char>;
+
+        default_downloader(data_t* dst, std::mutex* m) noexcept
+        : data_(*dst)
+        , mutex_(*m) {}
+
+        std::size_t write(const char* src, std::size_t size) override {
+            std::lock_guard<std::mutex> guard(mutex_);
+            data_.insert(data_.end(), src, src + size);
+            return size;
+        }
+    private:
+        data_t& data_;
+        std::mutex& mutex_;
+    };
+}
+
+// -----------------------------------------------------------------------------
+//
 // utils
 //
 // -----------------------------------------------------------------------------
@@ -35,16 +100,42 @@ namespace
 {
     using namespace curly_hpp;
 
-    using slist_t = std::unique_ptr<
-        curl_slist,
-        void(*)(curl_slist*)>;
+    template < typename T >
+    class mt_queue final {
+    public:
+        void enqueue(T v) {
+            std::lock_guard<std::mutex> guard(mutex_);
+            queue_.push(std::move(v));
+            cvar_.notify_all();
+        }
 
-    using curlh_t = std::unique_ptr<
-        CURL,
-        void(*)(CURL*)>;
+        bool try_dequeue(T& v) {
+            std::lock_guard<std::mutex> guard(mutex_);
+            if ( queue_.empty() ) {
+                return false;
+            }
+            v = queue_.front();
+            queue_.pop();
+            return true;
+        }
 
-    using req_state_t = std::shared_ptr<request::internal_state>;
-    std::map<CURL*, req_state_t> handles;
+        bool empty() const noexcept {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return queue_.empty();
+        }
+
+        bool wait_content_for(time_ms_t ms) const noexcept {
+            std::unique_lock<std::mutex> lock(mutex_);
+            return cvar_.wait_for(lock, ms, [this](){
+                return !queue_.empty();
+            });
+        }
+    private:
+        std::queue<T> queue_;
+    private:
+        mutable std::mutex mutex_;
+        mutable std::condition_variable cvar_;
+    };
 
     slist_t make_header_slist(const headers_t& headers) {
         std::string header_builder;
@@ -74,61 +165,21 @@ namespace
         }
         return {result, &curl_slist_free_all};
     }
-
-    class default_uploader final : public upload_handler {
-    public:
-        using data_t = std::vector<char>;
-
-        default_uploader(const data_t* src, std::mutex* m) noexcept
-        : data_(*src)
-        , mutex_(*m) {}
-
-        std::size_t size() const override {
-            std::lock_guard<std::mutex> guard(mutex_);
-            return data_.size();
-        }
-
-        std::size_t read(char* dst, std::size_t size) override {
-            std::lock_guard<std::mutex> guard(mutex_);
-            assert(size <= data_.size() - uploaded_);
-            std::memcpy(dst, data_.data() + uploaded_, size);
-            uploaded_ += size;
-            return size;
-        }
-    private:
-        const data_t& data_;
-        std::mutex& mutex_;
-        std::size_t uploaded_{0};
-    };
-
-    class default_downloader final : public download_handler {
-    public:
-        using data_t = std::vector<char>;
-
-        default_downloader(data_t* dst, std::mutex* m) noexcept
-        : data_(*dst)
-        , mutex_(*m) {}
-
-        std::size_t write(const char* src, std::size_t size) override {
-            std::lock_guard<std::mutex> guard(mutex_);
-            data_.insert(data_.end(), src, src + size);
-            return size;
-        }
-    private:
-        data_t& data_;
-        std::mutex& mutex_;
-    };
 }
 
 // -----------------------------------------------------------------------------
 //
-// curl_state
+// state
 //
 // -----------------------------------------------------------------------------
 
 namespace
 {
     using namespace curly_hpp;
+
+    using req_state_t = std::shared_ptr<request::internal_state>;
+    std::vector<req_state_t> active_handles;
+    mt_queue<req_state_t> new_handles;
 
     class curl_state final {
     public:
@@ -265,20 +316,31 @@ namespace curly_hpp
 {
     class request::internal_state final {
     public:
-        internal_state(curlh_t curlh, request_builder&& rb)
-        : hlist_(make_header_slist(rb.headers()))
-        , curlh_(std::move(curlh))
-        , content_(std::move(rb.content()))
-        , uploader_(std::move(rb.uploader()))
-        , downloader_(std::move(rb.downloader()))
+        internal_state(request_builder&& rb)
+        : breq_(std::move(rb))
         {
-            if ( !uploader_ ) {
-                uploader_ = std::make_unique<default_uploader>(&content_.data(), &mutex_);
+            if ( !breq_.uploader() ) {
+                breq_.uploader<default_uploader>(&breq_.content().data(), &mutex_);
             }
 
-            if ( !downloader_ ) {
-                downloader_ = std::make_unique<default_downloader>(&response_content_, &mutex_);
+            if ( !breq_.downloader() ) {
+                breq_.downloader<default_downloader>(&response_content_, &mutex_);
             }
+        }
+
+        void enqueue(CURLM* curlm) {
+            std::lock_guard<std::mutex> guard(mutex_);
+
+            assert(!curlh_);
+            curlh_ = curlh_t{
+                curl_easy_init(),
+                &curl_easy_cleanup};
+
+            if ( !curlh_ ) {
+                throw exception("curly_hpp: failed to curl_easy_init");
+            }
+
+            hlist_ = make_header_slist(breq_.headers());
 
             if ( const auto* vi = curl_version_info(CURLVERSION_NOW); vi && vi->version ) {
                 std::string user_agent("cURL/");
@@ -287,6 +349,7 @@ namespace curly_hpp
             }
 
             curl_easy_setopt(curlh_.get(), CURLOPT_NOSIGNAL, 1l);
+            curl_easy_setopt(curlh_.get(), CURLOPT_PRIVATE, this);
             curl_easy_setopt(curlh_.get(), CURLOPT_TCP_KEEPALIVE, 1l);
             curl_easy_setopt(curlh_.get(), CURLOPT_BUFFERSIZE, 65536l);
             curl_easy_setopt(curlh_.get(), CURLOPT_USE_SSL, CURLUSESSL_ALL);
@@ -300,15 +363,15 @@ namespace curly_hpp
             curl_easy_setopt(curlh_.get(), CURLOPT_HEADERDATA, this);
             curl_easy_setopt(curlh_.get(), CURLOPT_HEADERFUNCTION, &s_header_callback_);
 
-            curl_easy_setopt(curlh_.get(), CURLOPT_URL, rb.url().c_str());
+            curl_easy_setopt(curlh_.get(), CURLOPT_URL, breq_.url().c_str());
             curl_easy_setopt(curlh_.get(), CURLOPT_HTTPHEADER, hlist_.get());
-            curl_easy_setopt(curlh_.get(), CURLOPT_VERBOSE, rb.verbose() ? 1l : 0l);
+            curl_easy_setopt(curlh_.get(), CURLOPT_VERBOSE, breq_.verbose() ? 1l : 0l);
 
-            switch ( rb.method() ) {
+            switch ( breq_.method() ) {
             case methods::put:
                 curl_easy_setopt(curlh_.get(), CURLOPT_UPLOAD, 1l);
                 curl_easy_setopt(curlh_.get(), CURLOPT_INFILESIZE_LARGE,
-                    static_cast<curl_off_t>(uploader_->size()));
+                    static_cast<curl_off_t>(breq_.uploader()->size()));
                 break;
             case methods::get:
                 curl_easy_setopt(curlh_.get(), CURLOPT_HTTPGET, 1l);
@@ -319,13 +382,13 @@ namespace curly_hpp
             case methods::post:
                 curl_easy_setopt(curlh_.get(), CURLOPT_POST, 1l);
                 curl_easy_setopt(curlh_.get(), CURLOPT_POSTFIELDSIZE_LARGE,
-                    static_cast<curl_off_t>(uploader_->size()));
+                    static_cast<curl_off_t>(breq_.uploader()->size()));
                 break;
             default:
                 throw exception("curly_hpp: unexpected request method");
             }
 
-            if ( rb.verification() ) {
+            if ( breq_.verification() ) {
                 curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYPEER, 1l);
                 curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYHOST, 2l);
             } else {
@@ -333,22 +396,34 @@ namespace curly_hpp
                 curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYHOST, 0l);
             }
 
-            if ( rb.redirections() ) {
+            if ( breq_.redirections() ) {
                 curl_easy_setopt(curlh_.get(), CURLOPT_FOLLOWLOCATION, 1l);
                 curl_easy_setopt(curlh_.get(), CURLOPT_MAXREDIRS,
-                    static_cast<long>(rb.redirections()));
+                    static_cast<long>(breq_.redirections()));
             } else {
                 curl_easy_setopt(curlh_.get(), CURLOPT_FOLLOWLOCATION, 0l);
             }
 
             curl_easy_setopt(curlh_.get(), CURLOPT_TIMEOUT,
-                static_cast<long>(std::max(time_sec_t(1), rb.request_timeout()).count()));
+                static_cast<long>(std::max(time_sec_t(1), breq_.request_timeout()).count()));
 
             curl_easy_setopt(curlh_.get(), CURLOPT_CONNECTTIMEOUT,
-                static_cast<long>(std::max(time_sec_t(1), rb.connection_timeout()).count()));
+                static_cast<long>(std::max(time_sec_t(1), breq_.connection_timeout()).count()));
 
             last_response_ = time_point_t::clock::now();
-            response_timeout_ = std::max(time_sec_t(1), rb.response_timeout());
+            response_timeout_ = std::max(time_sec_t(1), breq_.response_timeout());
+
+            if ( CURLM_OK != curl_multi_add_handle(curlm, curlh_.get()) ) {
+                throw exception("curly_hpp: failed to curl_multi_add_handle");
+            }
+        }
+
+        void dequeue(CURLM* curlm) noexcept {
+            std::lock_guard<std::mutex> guard(mutex_);
+            if ( curlh_ ) {
+                curl_multi_remove_handle(curlm, curlh_.get());
+                curlh_.reset();
+            }
         }
 
         bool done() noexcept {
@@ -364,7 +439,7 @@ namespace curly_hpp
                 &code) || !code )
             {
                 status_ = statuses::failed;
-                cond_var_.notify_all();
+                cvar_.notify_all();
                 return false;
             }
 
@@ -372,18 +447,18 @@ namespace curly_hpp
                 response_ = response(static_cast<response_code_t>(code));
                 response_.content = std::move(response_content_);
                 response_.headers = std::move(response_headers_);
-                response_.uploader = std::move(uploader_);
-                response_.downloader = std::move(downloader_);
+                response_.uploader = std::move(breq_.uploader());
+                response_.downloader = std::move(breq_.downloader());
             } catch (...) {
                 status_ = statuses::failed;
-                cond_var_.notify_all();
+                cvar_.notify_all();
                 return false;
             }
 
             status_ = statuses::done;
             error_.clear();
 
-            cond_var_.notify_all();
+            cvar_.notify_all();
             return true;
         }
 
@@ -413,7 +488,7 @@ namespace curly_hpp
                 // nothing
             }
 
-            cond_var_.notify_all();
+            cvar_.notify_all();
             return true;
         }
 
@@ -426,16 +501,8 @@ namespace curly_hpp
             status_ = statuses::canceled;
             error_.clear();
 
-            cond_var_.notify_all();
+            cvar_.notify_all();
             return true;
-        }
-
-        statuses wait() const noexcept {
-            std::unique_lock<std::mutex> lock(mutex_);
-            cond_var_.wait(lock, [this](){
-                return status_ != statuses::pending;
-            });
-            return status_;
         }
 
         statuses status() const noexcept {
@@ -443,9 +510,33 @@ namespace curly_hpp
             return status_;
         }
 
+        statuses wait() const noexcept {
+            std::unique_lock<std::mutex> lock(mutex_);
+            cvar_.wait(lock, [this](){
+                return status_ != statuses::pending;
+            });
+            return status_;
+        }
+
+        statuses wait_for(time_ms_t ms) const noexcept {
+            std::unique_lock<std::mutex> lock(mutex_);
+            cvar_.wait_for(lock, ms, [this](){
+                return status_ != statuses::pending;
+            });
+            return status_;
+        }
+
+        statuses wait_until(time_point_t tp) const noexcept {
+            std::unique_lock<std::mutex> lock(mutex_);
+            cvar_.wait_until(lock, tp, [this](){
+                return status_ != statuses::pending;
+            });
+            return status_;
+        }
+
         response get() {
             std::unique_lock<std::mutex> lock(mutex_);
-            cond_var_.wait(lock, [this](){
+            cvar_.wait(lock, [this](){
                 return status_ != statuses::pending;
             });
             if ( status_ != statuses::done ) {
@@ -455,16 +546,12 @@ namespace curly_hpp
             return std::move(response_);
         }
 
-        const std::string& error() const noexcept {
+        const std::string& get_error() const noexcept {
             std::unique_lock<std::mutex> lock(mutex_);
-            cond_var_.wait(lock, [this](){
+            cvar_.wait(lock, [this](){
                 return status_ != statuses::pending;
             });
             return error_;
-        }
-
-        const curlh_t& curlh() const noexcept {
-            return curlh_;
         }
 
         bool check_response_timeout(time_point_t now) const noexcept {
@@ -500,8 +587,8 @@ namespace curly_hpp
 
         std::size_t upload_callback_(char* dst, std::size_t size) noexcept {
             try {
-                size = std::min(size, uploader_->size() - uploaded_.load());
-                const std::size_t read_bytes = uploader_->read(dst, size);
+                size = std::min(size, breq_.uploader()->size() - uploaded_.load());
+                const std::size_t read_bytes = breq_.uploader()->read(dst, size);
                 uploaded_.fetch_add(read_bytes);
                 return read_bytes;
             } catch (...) {
@@ -511,7 +598,7 @@ namespace curly_hpp
 
         std::size_t download_callback_(const char* src, std::size_t size) noexcept {
             try {
-                const std::size_t written_bytes = downloader_->write(src, size);
+                const std::size_t written_bytes = breq_.downloader()->write(src, size);
                 downloaded_.fetch_add(written_bytes);
                 return written_bytes;
             } catch (...) {
@@ -542,12 +629,9 @@ namespace curly_hpp
             }
         }
     private:
-        slist_t hlist_;
-        curlh_t curlh_;
-        content_t content_;
-        uploader_uptr uploader_;
-        downloader_uptr downloader_;
-    private:
+        request_builder breq_;
+        curlh_t curlh_{nullptr, &curl_easy_cleanup};
+        slist_t hlist_{nullptr, &curl_slist_free_all};
         time_point_t last_response_;
         time_point_t::duration response_timeout_;
     private:
@@ -562,7 +646,7 @@ namespace curly_hpp
         std::string error_{"Unknown error"};
     private:
         mutable std::mutex mutex_;
-        mutable std::condition_variable cond_var_;
+        mutable std::condition_variable cvar_;
     };
 }
 
@@ -577,20 +661,28 @@ namespace curly_hpp
         return state_->cancel();
     }
 
+    request::statuses request::status() const noexcept {
+        return state_->status();
+    }
+
     request::statuses request::wait() const noexcept {
         return state_->wait();
     }
 
-    request::statuses request::status() const noexcept {
-        return state_->status();
+    request::statuses request::wait_for(time_ms_t ms) const noexcept {
+        return state_->wait_for(ms);
+    }
+
+    request::statuses request::wait_until(time_point_t tp) const noexcept {
+        return state_->wait_until(tp);
     }
 
     response request::get() {
         return state_->get();
     }
 
-    const std::string& request::error() const noexcept {
-        return state_->error();
+    const std::string& request::get_error() const noexcept {
+        return state_->get_error();
     }
 }
 
@@ -738,32 +830,9 @@ namespace curly_hpp
     }
 
     request request_builder::send() {
-        return curl_state::with([this](CURLM* curlm){
-            curlh_t curlh{
-                curl_easy_init(),
-                &curl_easy_cleanup};
-
-            if ( !curlh ) {
-                throw exception("curly_hpp: failed to curl_easy_init");
-            }
-
-            auto sreq = std::make_shared<request::internal_state>(
-                std::move(curlh),
-                std::move(*this));
-
-            if ( CURLM_OK != curl_multi_add_handle(curlm, sreq->curlh().get()) ) {
-                throw exception("curly_hpp: failed to curl_multi_add_handle");
-            }
-
-            try {
-                handles.emplace(sreq->curlh().get(), sreq);
-            } catch (...) {
-                curl_multi_remove_handle(curlm, sreq->curlh().get());
-                throw;
-            }
-
-            return request(sreq);
-        });
+        auto sreq = std::make_shared<request::internal_state>(std::move(*this));
+        new_handles.enqueue(sreq);
+        return request(sreq);
     }
 }
 
@@ -810,42 +879,57 @@ namespace curly_hpp
 {
     void perform() {
         curl_state::with([](CURLM* curlm){
+            req_state_t sreq;
+            while ( new_handles.try_dequeue(sreq) ) {
+                try {
+                    sreq->enqueue(curlm);
+                    active_handles.emplace_back(sreq);
+                } catch (...) {
+                    sreq->fail(CURLcode::CURLE_FAILED_INIT);
+                    sreq->dequeue(curlm);
+                }
+            }
+        });
+
+        curl_state::with([](CURLM* curlm){
             int running_handles = 0;
             if ( CURLM_OK != curl_multi_perform(curlm, &running_handles) ) {
                 throw exception("curly_hpp: failed to curl_multi_perform");
             }
 
-            if ( static_cast<std::size_t>(running_handles) != handles.size() ) {
-                while ( true ) {
-                    int msgs_in_queue = 0;
-                    CURLMsg* msg = curl_multi_info_read(curlm, &msgs_in_queue);
-                    if ( !msg ) {
-                        break;
-                    }
-                    if ( msg->msg == CURLMSG_DONE ) {
-                        const auto iter = handles.find(msg->easy_handle);
-                        if ( iter != handles.end() ) {
-                            if ( msg->data.result == CURLE_OK ) {
-                                iter->second->done();
-                            } else {
-                                iter->second->fail(msg->data.result);
-                            }
-                        }
+            while ( true ) {
+                int msgs_in_queue = 0;
+                CURLMsg* msg = curl_multi_info_read(curlm, &msgs_in_queue);
+                if ( !msg ) {
+                    break;
+                }
+                if ( msg->msg != CURLMSG_DONE ) {
+                    continue;
+                }
+                void* priv_ptr = nullptr;
+                curl_easy_getinfo(msg->easy_handle, CURLINFO_PRIVATE, &priv_ptr);
+                if ( auto sreq = static_cast<req_state_t::element_type*>(priv_ptr); sreq ) {
+                    if ( msg->data.result == CURLcode::CURLE_OK ) {
+                        sreq->done();
+                    } else {
+                        sreq->fail(msg->data.result);
                     }
                 }
             }
 
             const auto now = time_point_t::clock::now();
-            for ( const auto& iter_p : handles ) {
-                if ( iter_p.second->check_response_timeout(now) ) {
-                    iter_p.second->fail(CURLE_OPERATION_TIMEDOUT);
+            for ( const auto& sreq : active_handles ) {
+                if ( sreq->check_response_timeout(now) ) {
+                    sreq->fail(CURLE_OPERATION_TIMEDOUT);
                 }
             }
+        });
 
-            for ( auto iter = handles.begin(); iter != handles.end(); ) {
-                if ( iter->second->status() != request::statuses::pending ) {
-                    curl_multi_remove_handle(curlm, iter->first);
-                    iter = handles.erase(iter);
+        curl_state::with([](CURLM* curlm){
+            for ( auto iter = active_handles.begin(); iter != active_handles.end(); ) {
+                if ( (*iter)->status() != request::statuses::pending ) {
+                    (*iter)->dequeue(curlm);
+                    iter = active_handles.erase(iter);
                 } else {
                     ++iter;
                 }
@@ -855,9 +939,13 @@ namespace curly_hpp
 
     void wait_activity(time_ms_t ms) {
         curl_state::with([ms](CURLM* curlm){
-            const int timeout_ms = static_cast<int>(ms.count());
-            if ( CURLM_OK != curl_multi_wait(curlm, nullptr, 0, timeout_ms, nullptr) ) {
-                throw exception("curly_hpp: failed to curl_multi_wait");
+            if ( active_handles.empty() ) {
+                new_handles.wait_content_for(ms);
+            } else if ( new_handles.empty() ) {
+                const int timeout_ms = static_cast<int>(ms.count());
+                if ( CURLM_OK != curl_multi_wait(curlm, nullptr, 0, timeout_ms, nullptr) ) {
+                    throw exception("curly_hpp: failed to curl_multi_wait");
+                }
             }
         });
     }

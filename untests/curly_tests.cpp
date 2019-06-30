@@ -61,20 +61,36 @@ TEST_CASE("curly") {
     performer.wait_activity(net::time_ms_t(10));
 
     SECTION("wait") {
-        auto req = net::request_builder("https://httpbin.org/delay/1").send();
-        REQUIRE(req.status() == net::request::statuses::pending);
-        REQUIRE(req.wait() == net::request::statuses::done);
-        REQUIRE(req.status() == net::request::statuses::done);
-        auto resp = req.get();
-        REQUIRE(resp.code() == 200u);
-        REQUIRE(req.status() == net::request::statuses::empty);
+        {
+            auto req = net::request_builder("https://httpbin.org/delay/1").send();
+            REQUIRE(req.status() == net::request::statuses::pending);
+            REQUIRE(req.wait() == net::request::statuses::done);
+            REQUIRE(req.status() == net::request::statuses::done);
+            auto resp = req.get();
+            REQUIRE(resp.code() == 200u);
+            REQUIRE(req.status() == net::request::statuses::empty);
+        }
+        {
+            auto req = net::request_builder("https://httpbin.org/delay/2").send();
+            REQUIRE(req.wait_for(net::time_sec_t(1)) == net::request::statuses::pending);
+            REQUIRE(req.wait_for(net::time_sec_t(5)) == net::request::statuses::done);
+            REQUIRE(req.get().code() == 200u);
+        }
+        {
+            auto req = net::request_builder("https://httpbin.org/delay/2").send();
+            REQUIRE(req.wait_until(net::time_point_t::clock::now() + net::time_sec_t(1))
+                == net::request::statuses::pending);
+            REQUIRE(req.wait_until(net::time_point_t::clock::now() + net::time_sec_t(5))
+                == net::request::statuses::done);
+            REQUIRE(req.get().code() == 200u);
+        }
     }
 
     SECTION("error") {
         auto req = net::request_builder("|||").send();
         REQUIRE(req.wait() == net::request::statuses::failed);
         REQUIRE(req.status() == net::request::statuses::failed);
-        REQUIRE_FALSE(req.error().empty());
+        REQUIRE_FALSE(req.get_error().empty());
     }
 
     SECTION("cancel") {
@@ -82,14 +98,14 @@ TEST_CASE("curly") {
             auto req = net::request_builder("https://httpbin.org/delay/1").send();
             REQUIRE(req.cancel());
             REQUIRE(req.status() == net::request::statuses::canceled);
-            REQUIRE(req.error().empty());
+            REQUIRE(req.get_error().empty());
         }
         {
             auto req = net::request_builder("https://httpbin.org/status/200").send();
             REQUIRE(req.wait() == net::request::statuses::done);
             REQUIRE_FALSE(req.cancel());
             REQUIRE(req.status() == net::request::statuses::done);
-            REQUIRE(req.error().empty());
+            REQUIRE(req.get_error().empty());
         }
     }
 
@@ -269,7 +285,7 @@ TEST_CASE("curly") {
                 .send();
             const auto resp = req.get();
             REQUIRE(resp.content.as_string_view() == "HTTPBIN is awesome");
-            REQUIRE(req.error().empty());
+            REQUIRE(req.get_error().empty());
         }
         {
             auto req0 = net::request_builder()
@@ -277,14 +293,14 @@ TEST_CASE("curly") {
                 .request_timeout(net::time_sec_t(0))
                 .send();
             REQUIRE(req0.wait() == net::request::statuses::timeout);
-            REQUIRE_FALSE(req0.error().empty());
+            REQUIRE_FALSE(req0.get_error().empty());
 
             auto req1 = net::request_builder()
                 .url("https://httpbin.org/delay/10")
                 .response_timeout(net::time_sec_t(0))
                 .send();
             REQUIRE(req1.wait() == net::request::statuses::timeout);
-            REQUIRE_FALSE(req1.error().empty());
+            REQUIRE_FALSE(req1.get_error().empty());
         }
         {
             auto req0 = net::request_builder()
@@ -292,14 +308,14 @@ TEST_CASE("curly") {
                 .request_timeout(net::time_sec_t(1))
                 .send();
             REQUIRE(req0.wait() == net::request::statuses::timeout);
-            REQUIRE_FALSE(req0.error().empty());
+            REQUIRE_FALSE(req0.get_error().empty());
 
             auto req1 = net::request_builder()
                 .url("https://httpbin.org/delay/10")
                 .response_timeout(net::time_sec_t(1))
                 .send();
             REQUIRE(req1.wait() == net::request::statuses::timeout);
-            REQUIRE_FALSE(req1.error().empty());
+            REQUIRE_FALSE(req1.get_error().empty());
         }
     }
 
@@ -576,7 +592,7 @@ TEST_CASE("curly_examples") {
             // throws net::exception because a response is unavailable
             // auto response = request.get();
 
-            std::cout << "Error message: " << request.error() << std::endl;
+            std::cout << "Error message: " << request.get_error() << std::endl;
         }
 
         // Error message: Couldn't resolve host name

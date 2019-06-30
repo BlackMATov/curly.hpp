@@ -134,11 +134,14 @@ namespace curly_hpp
         request(internal_state_ptr);
 
         bool cancel() noexcept;
-        statuses wait() const noexcept;
         statuses status() const noexcept;
 
+        statuses wait() const noexcept;
+        statuses wait_for(time_ms_t ms) const noexcept;
+        statuses wait_until(time_point_t tp) const noexcept;
+
         response get();
-        const std::string& error() const noexcept;
+        const std::string& get_error() const noexcept;
     private:
         internal_state_ptr state_;
     };
