@@ -108,6 +108,8 @@ namespace curly_hpp
         response& operator=(const response&) = delete;
 
         explicit response(http_code_t c) noexcept;
+
+        bool is_http_error() const noexcept;
         http_code_t http_code() const noexcept;
     public:
         content_t content;
@@ -147,8 +149,13 @@ namespace curly_hpp
         statuses wait_for(time_ms_t ms) const noexcept;
         statuses wait_until(time_point_t tp) const noexcept;
 
+        statuses wait_callback() const noexcept;
+        statuses wait_callback_for(time_ms_t ms) const noexcept;
+        statuses wait_callback_until(time_point_t tp) const noexcept;
+
         response get();
         const std::string& get_error() const noexcept;
+        std::exception_ptr get_callback_exception() const noexcept;
     private:
         internal_state_ptr state_;
     };

@@ -538,6 +538,84 @@ TEST_CASE("curly") {
             REQUIRE(req.wait() == net::request::statuses::canceled);
         }
     }
+
+    SECTION("callback") {
+        {
+            std::atomic_size_t call_once{0u};
+            auto req = net::request_builder("http://www.httpbin.org/get")
+                .callback([&call_once](net::request request){
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    ++call_once;
+                    REQUIRE(request.is_done());
+                    REQUIRE(request.status() == net::request::statuses::done);
+                    REQUIRE(request.get().http_code() == 200u);
+                }).send();
+            REQUIRE(req.wait_callback() == net::request::statuses::empty);
+            REQUIRE_FALSE(req.get_callback_exception());
+            REQUIRE(call_once.load() == 1u);
+        }
+        {
+            std::atomic_size_t call_once{0u};
+            auto req = net::request_builder("|||")
+                .callback([&call_once](net::request request){
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    ++call_once;
+                    REQUIRE_FALSE(request.is_done());
+                    REQUIRE(request.status() == net::request::statuses::failed);
+                    REQUIRE_FALSE(request.get_error().empty());
+                }).send();
+            REQUIRE(req.wait_callback() == net::request::statuses::failed);
+            REQUIRE_FALSE(req.get_callback_exception());
+            REQUIRE(call_once.load() == 1u);
+        }
+        {
+            std::atomic_size_t call_once{0u};
+            auto req = net::request_builder("http://www.httpbin.org/delay/2")
+                .response_timeout(net::time_sec_t(0))
+                .callback([&call_once](net::request request){
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    ++call_once;
+                    REQUIRE_FALSE(request.is_done());
+                    REQUIRE(request.status() == net::request::statuses::timeout);
+                    REQUIRE_FALSE(request.get_error().empty());
+                }).send();
+            REQUIRE(req.wait_callback() == net::request::statuses::timeout);
+            REQUIRE_FALSE(req.get_callback_exception());
+            REQUIRE(call_once.load() == 1u);
+        }
+        {
+            std::atomic_size_t call_once{0u};
+            auto req = net::request_builder("http://www.httpbin.org/delay/2")
+                .callback([&call_once](net::request request){
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    ++call_once;
+                    REQUIRE_FALSE(request.is_done());
+                    REQUIRE(request.status() == net::request::statuses::canceled);
+                    REQUIRE(request.get_error().empty());
+                }).send();
+            REQUIRE(req.cancel());
+            REQUIRE(req.wait_callback() == net::request::statuses::canceled);
+            REQUIRE_FALSE(req.get_callback_exception());
+            REQUIRE(call_once.load() == 1u);
+        }
+    }
+
+    SECTION("callback_exception") {
+        auto req = net::request_builder("http://www.httpbin.org/post")
+            .callback([](net::request request){
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                if ( request.get().is_http_error() ) {
+                    throw std::logic_error("my_logic_error");
+                }
+            }).send();
+        REQUIRE(req.wait_callback() == net::request::statuses::empty);
+        REQUIRE(req.get_callback_exception());
+        try {
+            std::rethrow_exception(req.get_callback_exception());
+        } catch (const std::logic_error& e) {
+            REQUIRE(std::string_view("my_logic_error") == e.what());
+        }
+    }
 }
 
 TEST_CASE("curly_examples") {
@@ -610,7 +688,9 @@ TEST_CASE("curly_examples") {
             .url("http://unavailable.site.com")
             .send();
 
-        if ( request.wait() == net::request::statuses::done ) {
+        request.wait();
+
+        if ( request.is_done() ) {
             auto response = request.get();
             std::cout << "Status code: " << response.http_code() << std::endl;
         } else {
@@ -621,6 +701,21 @@ TEST_CASE("curly_examples") {
         }
 
         // Error message: Couldn't resolve host name
+    }
+
+    SECTION("Request Callback") {
+        auto request = net::request_builder("http://www.httpbin.org/get")
+            .callback([](net::request request){
+                if ( request.is_done() ) {
+                    auto response = request.get();
+                    std::cout << "Status code: " << response.http_code() << std::endl;
+                } else {
+                    std::cout << "Error message: " << request.get_error() << std::endl;
+                }
+            }).send();
+
+        request.wait_callback();
+        // Status code: 200
     }
 
     SECTION("Streamed Requests") {

@@ -300,6 +300,10 @@ namespace curly_hpp
     response::response(http_code_t c) noexcept
     : http_code_(c) {}
 
+    bool response::is_http_error() const noexcept {
+        return http_code_ >= 400u;
+    }
+
     http_code_t response::http_code() const noexcept {
         return http_code_;
     }
@@ -431,11 +435,11 @@ namespace curly_hpp
                 return false;
             }
 
-            long code = 0;
+            long http_code = 0;
             if ( CURLE_OK != curl_easy_getinfo(
                 curlh_.get(),
                 CURLINFO_RESPONSE_CODE,
-                &code) || !code )
+                &http_code) || !http_code )
             {
                 status_ = statuses::failed;
                 cvar_.notify_all();
@@ -443,7 +447,7 @@ namespace curly_hpp
             }
 
             try {
-                response_ = response(static_cast<http_code_t>(code));
+                response_ = response(static_cast<http_code_t>(http_code));
                 response_.content = std::move(response_content_);
                 response_.headers = std::move(response_headers_);
                 response_.uploader = std::move(breq_.uploader());
@@ -519,26 +523,29 @@ namespace curly_hpp
             return status_ == statuses::pending;
         }
 
-        statuses wait() const noexcept {
+        statuses wait(bool wait_callback) const noexcept {
             std::unique_lock<std::mutex> lock(mutex_);
-            cvar_.wait(lock, [this](){
-                return status_ != statuses::pending;
+            cvar_.wait(lock, [this, wait_callback](){
+                return (status_ != statuses::pending)
+                    && (!wait_callback || callbacked_);
             });
             return status_;
         }
 
-        statuses wait_for(time_ms_t ms) const noexcept {
+        statuses wait_for(time_ms_t ms, bool wait_callback) const noexcept {
             std::unique_lock<std::mutex> lock(mutex_);
-            cvar_.wait_for(lock, ms, [this](){
-                return status_ != statuses::pending;
+            cvar_.wait_for(lock, ms, [this, wait_callback](){
+                return (status_ != statuses::pending)
+                    && (!wait_callback || callbacked_);
             });
             return status_;
         }
 
-        statuses wait_until(time_point_t tp) const noexcept {
+        statuses wait_until(time_point_t tp, bool wait_callback) const noexcept {
             std::unique_lock<std::mutex> lock(mutex_);
-            cvar_.wait_until(lock, tp, [this](){
-                return status_ != statuses::pending;
+            cvar_.wait_until(lock, tp, [this, wait_callback](){
+                return (status_ != statuses::pending)
+                    && (!wait_callback || callbacked_);
             });
             return status_;
         }
@@ -561,6 +568,30 @@ namespace curly_hpp
                 return status_ != statuses::pending;
             });
             return error_;
+        }
+
+        std::exception_ptr get_callback_exception() const noexcept {
+            std::unique_lock<std::mutex> lock(mutex_);
+            cvar_.wait(lock, [this](){
+                return callbacked_;
+            });
+            return callback_exception_;
+        }
+
+        template < typename... Args >
+        void call_callback(Args&&... args) noexcept {
+            try {
+                if ( breq_.callback() ) {
+                    breq_.callback()(std::forward<Args>(args)...);
+                }
+            } catch (...) {
+                std::lock_guard<std::mutex> guard(mutex_);
+                callback_exception_ = std::current_exception();
+            }
+            std::lock_guard<std::mutex> guard(mutex_);
+            assert(!callbacked_ && status_ != statuses::pending);
+            callbacked_ = true;
+            cvar_.notify_all();
         }
 
         bool check_response_timeout(time_point_t now) const noexcept {
@@ -651,6 +682,9 @@ namespace curly_hpp
         std::atomic_size_t uploaded_{0u};
         std::atomic_size_t downloaded_{0u};
     private:
+        bool callbacked_{false};
+        std::exception_ptr callback_exception_{nullptr};
+    private:
         statuses status_{statuses::pending};
         std::string error_{"Unknown error"};
     private:
@@ -683,15 +717,27 @@ namespace curly_hpp
     }
 
     request::statuses request::wait() const noexcept {
-        return state_->wait();
+        return state_->wait(false);
     }
 
     request::statuses request::wait_for(time_ms_t ms) const noexcept {
-        return state_->wait_for(ms);
+        return state_->wait_for(ms, false);
     }
 
     request::statuses request::wait_until(time_point_t tp) const noexcept {
-        return state_->wait_until(tp);
+        return state_->wait_until(tp, false);
+    }
+
+    request::statuses request::wait_callback() const noexcept {
+        return state_->wait(true);
+    }
+
+    request::statuses request::wait_callback_for(time_ms_t ms) const noexcept {
+        return state_->wait_for(ms, true);
+    }
+
+    request::statuses request::wait_callback_until(time_point_t tp) const noexcept {
+        return state_->wait_until(tp, true);
     }
 
     response request::get() {
@@ -700,6 +746,10 @@ namespace curly_hpp
 
     const std::string& request::get_error() const noexcept {
         return state_->get_error();
+    }
+
+    std::exception_ptr request::get_callback_exception() const noexcept {
+        return state_->get_callback_exception();
     }
 }
 
@@ -917,6 +967,7 @@ namespace curly_hpp
                 } catch (...) {
                     sreq->fail(CURLcode::CURLE_FAILED_INIT);
                     sreq->dequeue(curlm);
+                    sreq->call_callback(sreq);
                 }
             }
         });
@@ -959,6 +1010,7 @@ namespace curly_hpp
             for ( auto iter = active_handles.begin(); iter != active_handles.end(); ) {
                 if ( !(*iter)->is_pending() ) {
                     (*iter)->dequeue(curlm);
+                    (*iter)->call_callback(*iter);
                     iter = active_handles.erase(iter);
                 } else {
                     ++iter;

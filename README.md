@@ -30,6 +30,7 @@
 - Custom headers
 - Asynchronous requests
 - Different types of timeouts
+- Custom completion callbacks
 - PUT, GET, HEAD, POST methods
 - Custom uploading and downloading streams
 
@@ -134,7 +135,9 @@ auto request = net::request_builder()
     .url("http://unavailable.site.com")
     .send();
 
-if ( request.wait() == net::request::statuses::done ) {
+request.wait();
+
+if ( request.is_done() ) {
     auto response = request.get();
     std::cout << "Status code: " << response.http_code() << std::endl;
 } else {
@@ -145,6 +148,23 @@ if ( request.wait() == net::request::statuses::done ) {
 }
 
 // Error message: Couldn't resolve host name
+```
+
+### Request Callback
+
+```cpp
+auto request = net::request_builder("http://www.httpbin.org/get")
+    .callback([](net::request request){
+        if ( request.is_done() ) {
+            auto response = request.get();
+            std::cout << "Status code: " << response.http_code() << std::endl;
+        } else {
+            std::cout << "Error message: " << request.get_error() << std::endl;
+        }
+    }).send();
+
+request.wait_callback();
+// Status code: 200
 ```
 
 ### Streamed Requests
