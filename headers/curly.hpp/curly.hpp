@@ -140,6 +140,9 @@ namespace curly_hpp
         bool cancel() noexcept;
         statuses status() const noexcept;
 
+        bool is_done() const noexcept;
+        bool is_pending() const noexcept;
+
         statuses wait() const noexcept;
         statuses wait_for(time_ms_t ms) const noexcept;
         statuses wait_until(time_point_t tp) const noexcept;

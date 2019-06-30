@@ -109,6 +109,31 @@ TEST_CASE("curly") {
         }
     }
 
+    SECTION("is_done/is_pending") {
+        {
+            auto req = net::request_builder(net::methods::get)
+                .url("https://httpbin.org/delay/1")
+                .send();
+            REQUIRE_FALSE(req.is_done());
+            REQUIRE(req.is_pending());
+            req.wait();
+            REQUIRE(req.is_done());
+            REQUIRE_FALSE(req.is_pending());
+        }
+        {
+            auto req = net::request_builder(net::methods::post, "http://www.httpbin.org/post")
+                .url("https://httpbin.org/delay/2")
+                .request_timeout(net::time_sec_t(1))
+                .send();
+            REQUIRE_FALSE(req.is_done());
+            REQUIRE(req.is_pending());
+            req.wait();
+            REQUIRE_FALSE(req.is_done());
+            REQUIRE_FALSE(req.is_pending());
+            REQUIRE(!req.get_error().empty());
+        }
+    }
+
     SECTION("get") {
         {
             auto req = net::request_builder("https://httpbin.org/status/204").send();

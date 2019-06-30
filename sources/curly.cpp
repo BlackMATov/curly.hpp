@@ -509,6 +509,16 @@ namespace curly_hpp
             return status_;
         }
 
+        bool is_done() const noexcept {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return status_ == statuses::done;
+        }
+
+        bool is_pending() const noexcept {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return status_ == statuses::pending;
+        }
+
         statuses wait() const noexcept {
             std::unique_lock<std::mutex> lock(mutex_);
             cvar_.wait(lock, [this](){
@@ -662,6 +672,14 @@ namespace curly_hpp
 
     request::statuses request::status() const noexcept {
         return state_->status();
+    }
+
+    bool request::is_done() const noexcept {
+        return state_->is_done();
+    }
+
+    bool request::is_pending() const noexcept {
+        return state_->is_pending();
     }
 
     request::statuses request::wait() const noexcept {
@@ -939,7 +957,7 @@ namespace curly_hpp
 
         curl_state::with([](CURLM* curlm){
             for ( auto iter = active_handles.begin(); iter != active_handles.end(); ) {
-                if ( (*iter)->status() != request::statuses::pending ) {
+                if ( !(*iter)->is_pending() ) {
                     (*iter)->dequeue(curlm);
                     iter = active_handles.erase(iter);
                 } else {
