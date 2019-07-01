@@ -150,7 +150,7 @@ if ( request.is_done() ) {
 // Error message: Couldn't resolve host name
 ```
 
-### Request Callback
+### Request Callbacks
 
 ```cpp
 auto request = net::request_builder("http://www.httpbin.org/get")
@@ -221,6 +221,52 @@ net::request_builder()
     .url("https://httpbin.org/anything")
     .uploader<file_uploader>("image.jpeg")
     .send().wait();
+```
+
+## Promised Requests
+
+Also, you can easily integrate promises like a [promise.hpp](https://github.com/BlackMATov/promise.hpp).
+
+```cpp
+#include <curly.hpp/curly.hpp>
+namespace net = curly_hpp;
+
+#include <promise.hpp/promise.hpp>
+namespace netex = promise_hpp;
+
+netex::promise<net::content_t> download(std::string url) {
+    return netex::make_promise<net::content_t>([
+        url = std::move(url)
+    ](auto resolve, auto reject){
+        net::request_builder(std::move(url))
+            .callback([resolve,reject](net::request request) mutable {
+                if ( !request.is_done() ) {
+                    reject(net::exception("network error"));
+                    return;
+                }
+                net::response response = request.get();
+                if ( response.is_http_error() ) {
+                    reject(net::exception("server error"));
+                    return;
+                }
+                resolve(std::move(response.content));
+            }).send();
+    });
+}
+
+auto promise = download("https://httpbin.org/image/png")
+    .then([](const net::content_t& content){
+        std::cout << content.size() << " bytes downloaded" << std::endl;
+    }).except([](std::exception_ptr e){
+        try {
+            std::rethrow_exception(e);
+        } catch (const std::exception& ee) {
+            std::cerr << "Failed to download: " << ee.what() << std::endl;
+        }
+    });
+
+promise.wait();
+// 8090 bytes downloaded
 ```
 
 ## API
