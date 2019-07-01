@@ -16,6 +16,9 @@ namespace json = rapidjson;
 #include <curly.hpp/curly.hpp>
 namespace net = curly_hpp;
 
+#include <promise.hpp/promise.hpp>
+namespace netex = promise_hpp;
+
 #include "png_data.h"
 #include "jpeg_data.h"
 
@@ -54,6 +57,26 @@ namespace
             throw std::exception();
         }
     };
+
+    netex::promise<net::content_t> download(std::string url) {
+        return netex::make_promise<net::content_t>([
+            url = std::move(url)
+        ](auto resolve, auto reject){
+            net::request_builder(std::move(url))
+                .callback([resolve,reject](net::request request) mutable {
+                    if ( !request.is_done() ) {
+                        reject(net::exception("network error"));
+                        return;
+                    }
+                    net::response response = request.get();
+                    if ( response.is_http_error() ) {
+                        reject(net::exception("server error"));
+                        return;
+                    }
+                    resolve(std::move(response.content));
+                }).send();
+        });
+    }
 }
 
 TEST_CASE("curly") {
@@ -67,14 +90,14 @@ TEST_CASE("curly") {
             REQUIRE(req.wait() == net::request::statuses::done);
             REQUIRE(req.status() == net::request::statuses::done);
             auto resp = req.get();
-            REQUIRE(resp.code() == 200u);
+            REQUIRE(resp.http_code() == 200u);
             REQUIRE(req.status() == net::request::statuses::empty);
         }
         {
             auto req = net::request_builder("https://httpbin.org/delay/2").send();
             REQUIRE(req.wait_for(net::time_sec_t(1)) == net::request::statuses::pending);
             REQUIRE(req.wait_for(net::time_sec_t(5)) == net::request::statuses::done);
-            REQUIRE(req.get().code() == 200u);
+            REQUIRE(req.get().http_code() == 200u);
         }
         {
             auto req = net::request_builder("https://httpbin.org/delay/2").send();
@@ -82,7 +105,7 @@ TEST_CASE("curly") {
                 == net::request::statuses::pending);
             REQUIRE(req.wait_until(net::time_point_t::clock::now() + net::time_sec_t(5))
                 == net::request::statuses::done);
-            REQUIRE(req.get().code() == 200u);
+            REQUIRE(req.get().http_code() == 200u);
         }
     }
 
@@ -109,12 +132,37 @@ TEST_CASE("curly") {
         }
     }
 
+    SECTION("is_done/is_pending") {
+        {
+            auto req = net::request_builder(net::methods::get)
+                .url("https://httpbin.org/delay/1")
+                .send();
+            REQUIRE_FALSE(req.is_done());
+            REQUIRE(req.is_pending());
+            req.wait();
+            REQUIRE(req.is_done());
+            REQUIRE_FALSE(req.is_pending());
+        }
+        {
+            auto req = net::request_builder(net::methods::post, "http://www.httpbin.org/post")
+                .url("https://httpbin.org/delay/2")
+                .request_timeout(net::time_sec_t(1))
+                .send();
+            REQUIRE_FALSE(req.is_done());
+            REQUIRE(req.is_pending());
+            req.wait();
+            REQUIRE_FALSE(req.is_done());
+            REQUIRE_FALSE(req.is_pending());
+            REQUIRE(!req.get_error().empty());
+        }
+    }
+
     SECTION("get") {
         {
             auto req = net::request_builder("https://httpbin.org/status/204").send();
             auto resp = req.get();
             REQUIRE(req.status() == net::request::statuses::empty);
-            REQUIRE(resp.code() == 204u);
+            REQUIRE(resp.http_code() == 204u);
         }
         {
             auto req = net::request_builder("https://httpbin.org/delay/2").send();
@@ -138,75 +186,75 @@ TEST_CASE("curly") {
                 .url("https://httpbin.org/put")
                 .method(net::methods::put)
                 .send();
-            REQUIRE(req0.get().code() == 200u);
+            REQUIRE(req0.get().http_code() == 200u);
 
             auto req1 = net::request_builder()
                 .url("https://httpbin.org/put")
                 .method(net::methods::get)
                 .send();
-            REQUIRE(req1.get().code() == 405u);
+            REQUIRE(req1.get().http_code() == 405u);
 
             auto req2 = net::request_builder()
                 .url("https://httpbin.org/put")
                 .method(net::methods::head)
                 .send();
-            REQUIRE(req2.get().code() == 405u);
+            REQUIRE(req2.get().http_code() == 405u);
 
             auto req3 = net::request_builder()
                 .url("https://httpbin.org/put")
                 .method(net::methods::post)
                 .send();
-            REQUIRE(req3.get().code() == 405u);
+            REQUIRE(req3.get().http_code() == 405u);
         }
         {
             auto req0 = net::request_builder()
                 .url("https://httpbin.org/get")
                 .method(net::methods::put)
                 .send();
-            REQUIRE(req0.get().code() == 405u);
+            REQUIRE(req0.get().http_code() == 405u);
 
             auto req1 = net::request_builder()
                 .url("https://httpbin.org/get")
                 .method(net::methods::get)
                 .send();
-            REQUIRE(req1.get().code() == 200u);
+            REQUIRE(req1.get().http_code() == 200u);
 
             auto req2 = net::request_builder()
                 .url("https://httpbin.org/get")
                 .method(net::methods::head)
                 .send();
-            REQUIRE(req2.get().code() == 200u);
+            REQUIRE(req2.get().http_code() == 200u);
 
             auto req3 = net::request_builder()
                 .url("https://httpbin.org/get")
                 .method(net::methods::post)
                 .send();
-            REQUIRE(req3.get().code() == 405u);
+            REQUIRE(req3.get().http_code() == 405u);
         }
         {
             auto req0 = net::request_builder()
                 .url("https://httpbin.org/post")
                 .method(net::methods::put)
                 .send();
-            REQUIRE(req0.get().code() == 405u);
+            REQUIRE(req0.get().http_code() == 405u);
 
             auto req1 = net::request_builder()
                 .url("https://httpbin.org/post")
                 .method(net::methods::get)
                 .send();
-            REQUIRE(req1.get().code() == 405u);
+            REQUIRE(req1.get().http_code() == 405u);
 
             auto req2 = net::request_builder()
                 .url("https://httpbin.org/post")
                 .method(net::methods::head)
                 .send();
-            REQUIRE(req2.get().code() == 405u);
+            REQUIRE(req2.get().http_code() == 405u);
 
             auto req3 = net::request_builder()
                 .url("https://httpbin.org/post")
                 .method(net::methods::post)
                 .send();
-            REQUIRE(req3.get().code() == 200u);
+            REQUIRE(req3.get().http_code() == 200u);
         }
     }
 
@@ -216,28 +264,28 @@ TEST_CASE("curly") {
                 .url("https://httpbin.org/status/200")
                 .method(net::methods::put)
                 .send();
-            REQUIRE(req.get().code() == 200u);
+            REQUIRE(req.get().http_code() == 200u);
         }
         {
             auto req = net::request_builder()
                 .url("https://httpbin.org/status/201")
                 .method(net::methods::get)
                 .send();
-            REQUIRE(req.get().code() == 201u);
+            REQUIRE(req.get().http_code() == 201u);
         }
         {
             auto req = net::request_builder()
                 .url("https://httpbin.org/status/202")
                 .method(net::methods::head)
                 .send();
-            REQUIRE(req.get().code() == 202u);
+            REQUIRE(req.get().http_code() == 202u);
         }
         {
             auto req = net::request_builder()
                 .url("https://httpbin.org/status/203")
                 .method(net::methods::post)
                 .send();
-            REQUIRE(req.get().code() == 203u);
+            REQUIRE(req.get().http_code() == 203u);
         }
     }
 
@@ -325,7 +373,7 @@ TEST_CASE("curly") {
                 .url("https://httpbin.org/image/png")
                 .method(net::methods::get)
                 .send().get();
-            REQUIRE(resp.code() == 200u);
+            REQUIRE(resp.http_code() == 200u);
             REQUIRE(resp.headers.count("Content-Type"));
             REQUIRE(resp.headers.at("Content-Type") == "image/png");
             REQUIRE(untests::png_data_length == resp.content.size());
@@ -338,7 +386,7 @@ TEST_CASE("curly") {
                 .url("https://httpbin.org/image/jpeg")
                 .method(net::methods::get)
                 .send().get();
-            REQUIRE(resp.code() == 200u);
+            REQUIRE(resp.http_code() == 200u);
             REQUIRE(resp.headers.count("Content-Type"));
             REQUIRE(resp.headers.at("Content-Type") == "image/jpeg");
             REQUIRE(untests::jpeg_data_length == resp.content.size());
@@ -355,21 +403,21 @@ TEST_CASE("curly") {
                     .url("https://httpbin.org/redirect/2")
                     .method(net::methods::get)
                     .send();
-                REQUIRE(req.get().code() == 200u);
+                REQUIRE(req.get().http_code() == 200u);
             }
             {
                 auto req = net::request_builder()
                     .url("https://httpbin.org/absolute-redirect/2")
                     .method(net::methods::get)
                     .send();
-                REQUIRE(req.get().code() == 200u);
+                REQUIRE(req.get().http_code() == 200u);
             }
             {
                 auto req = net::request_builder()
                     .url("https://httpbin.org/relative-redirect/2")
                     .method(net::methods::get)
                     .send();
-                REQUIRE(req.get().code() == 200u);
+                REQUIRE(req.get().http_code() == 200u);
             }
         }
         {
@@ -379,7 +427,7 @@ TEST_CASE("curly") {
                     .method(net::methods::get)
                     .redirections(0)
                     .send();
-                REQUIRE(req.get().code() == 302u);
+                REQUIRE(req.get().http_code() == 302u);
             }
             {
                 auto req = net::request_builder()
@@ -403,7 +451,7 @@ TEST_CASE("curly") {
                     .method(net::methods::get)
                     .redirections(3)
                     .send();
-                REQUIRE(req.get().code() == 200u);
+                REQUIRE(req.get().http_code() == 200u);
             }
         }
     }
@@ -513,6 +561,84 @@ TEST_CASE("curly") {
             REQUIRE(req.wait() == net::request::statuses::canceled);
         }
     }
+
+    SECTION("callback") {
+        {
+            std::atomic_size_t call_once{0u};
+            auto req = net::request_builder("http://www.httpbin.org/get")
+                .callback([&call_once](net::request request){
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    ++call_once;
+                    REQUIRE(request.is_done());
+                    REQUIRE(request.status() == net::request::statuses::done);
+                    REQUIRE(request.get().http_code() == 200u);
+                }).send();
+            REQUIRE(req.wait_callback() == net::request::statuses::empty);
+            REQUIRE_FALSE(req.get_callback_exception());
+            REQUIRE(call_once.load() == 1u);
+        }
+        {
+            std::atomic_size_t call_once{0u};
+            auto req = net::request_builder("|||")
+                .callback([&call_once](net::request request){
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    ++call_once;
+                    REQUIRE_FALSE(request.is_done());
+                    REQUIRE(request.status() == net::request::statuses::failed);
+                    REQUIRE_FALSE(request.get_error().empty());
+                }).send();
+            REQUIRE(req.wait_callback() == net::request::statuses::failed);
+            REQUIRE_FALSE(req.get_callback_exception());
+            REQUIRE(call_once.load() == 1u);
+        }
+        {
+            std::atomic_size_t call_once{0u};
+            auto req = net::request_builder("http://www.httpbin.org/delay/2")
+                .response_timeout(net::time_sec_t(0))
+                .callback([&call_once](net::request request){
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    ++call_once;
+                    REQUIRE_FALSE(request.is_done());
+                    REQUIRE(request.status() == net::request::statuses::timeout);
+                    REQUIRE_FALSE(request.get_error().empty());
+                }).send();
+            REQUIRE(req.wait_callback() == net::request::statuses::timeout);
+            REQUIRE_FALSE(req.get_callback_exception());
+            REQUIRE(call_once.load() == 1u);
+        }
+        {
+            std::atomic_size_t call_once{0u};
+            auto req = net::request_builder("http://www.httpbin.org/delay/2")
+                .callback([&call_once](net::request request){
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    ++call_once;
+                    REQUIRE_FALSE(request.is_done());
+                    REQUIRE(request.status() == net::request::statuses::canceled);
+                    REQUIRE(request.get_error().empty());
+                }).send();
+            REQUIRE(req.cancel());
+            REQUIRE(req.wait_callback() == net::request::statuses::canceled);
+            REQUIRE_FALSE(req.get_callback_exception());
+            REQUIRE(call_once.load() == 1u);
+        }
+    }
+
+    SECTION("callback_exception") {
+        auto req = net::request_builder("http://www.httpbin.org/post")
+            .callback([](net::request request){
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                if ( request.get().is_http_error() ) {
+                    throw std::logic_error("my_logic_error");
+                }
+            }).send();
+        REQUIRE(req.wait_callback() == net::request::statuses::empty);
+        REQUIRE(req.get_callback_exception());
+        try {
+            std::rethrow_exception(req.get_callback_exception());
+        } catch (const std::logic_error& e) {
+            REQUIRE(std::string_view("my_logic_error") == e.what());
+        }
+    }
 }
 
 TEST_CASE("curly_examples") {
@@ -529,7 +655,7 @@ TEST_CASE("curly_examples") {
         auto response = request.get();
 
         // prints results
-        std::cout << "Status code: " << response.code() << std::endl;
+        std::cout << "Status code: " << response.http_code() << std::endl;
         std::cout << "Content type: " << response.headers["content-type"] << std::endl;
         std::cout << "Body content: " << response.content.as_string_view() << std::endl;
 
@@ -585,9 +711,11 @@ TEST_CASE("curly_examples") {
             .url("http://unavailable.site.com")
             .send();
 
-        if ( request.wait() == net::request::statuses::done ) {
+        request.wait();
+
+        if ( request.is_done() ) {
             auto response = request.get();
-            std::cout << "Status code: " << response.code() << std::endl;
+            std::cout << "Status code: " << response.http_code() << std::endl;
         } else {
             // throws net::exception because a response is unavailable
             // auto response = request.get();
@@ -596,6 +724,21 @@ TEST_CASE("curly_examples") {
         }
 
         // Error message: Couldn't resolve host name
+    }
+
+    SECTION("Request Callbacks") {
+        auto request = net::request_builder("http://www.httpbin.org/get")
+            .callback([](net::request request){
+                if ( request.is_done() ) {
+                    auto response = request.get();
+                    std::cout << "Status code: " << response.http_code() << std::endl;
+                } else {
+                    std::cout << "Error message: " << request.get_error() << std::endl;
+                }
+            }).send();
+
+        request.wait_callback();
+        // Status code: 200
     }
 
     SECTION("Streamed Requests") {
@@ -647,5 +790,21 @@ TEST_CASE("curly_examples") {
                 .uploader<file_uploader>("image.jpeg")
                 .send().get();
         }
+    }
+
+    SECTION("Promised Requests") {
+        auto promise = download("https://httpbin.org/image/png")
+            .then([](const net::content_t& content){
+                std::cout << content.size() << " bytes downloaded" << std::endl;
+            }).except([](std::exception_ptr e){
+                try {
+                    std::rethrow_exception(e);
+                } catch (const std::exception& ee) {
+                    std::cerr << "Failed to download: " << ee.what() << std::endl;
+                }
+            });
+
+        promise.wait();
+        // 8090 bytes downloaded
     }
 }

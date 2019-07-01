@@ -30,6 +30,7 @@
 - Custom headers
 - Asynchronous requests
 - Different types of timeouts
+- Custom completion callbacks
 - PUT, GET, HEAD, POST methods
 - Custom uploading and downloading streams
 
@@ -74,7 +75,7 @@ auto request = net::request_builder()
 auto response = request.get();
 
 // prints results
-std::cout << "Status code: " << response.code() << std::endl;
+std::cout << "Status code: " << response.http_code() << std::endl;
 std::cout << "Content type: " << response.headers["content-type"] << std::endl;
 std::cout << "Body content: " << response.content.as_string_view() << std::endl;
 
@@ -134,9 +135,11 @@ auto request = net::request_builder()
     .url("http://unavailable.site.com")
     .send();
 
-if ( request.wait() == net::request::statuses::done ) {
+request.wait();
+
+if ( request.is_done() ) {
     auto response = request.get();
-    std::cout << "Status code: " << response.code() << std::endl;
+    std::cout << "Status code: " << response.http_code() << std::endl;
 } else {
     // throws net::exception because a response is unavailable
     // auto response = request.get();
@@ -145,6 +148,23 @@ if ( request.wait() == net::request::statuses::done ) {
 }
 
 // Error message: Couldn't resolve host name
+```
+
+### Request Callbacks
+
+```cpp
+auto request = net::request_builder("http://www.httpbin.org/get")
+    .callback([](net::request request){
+        if ( request.is_done() ) {
+            auto response = request.get();
+            std::cout << "Status code: " << response.http_code() << std::endl;
+        } else {
+            std::cout << "Error message: " << request.get_error() << std::endl;
+        }
+    }).send();
+
+request.wait_callback();
+// Status code: 200
 ```
 
 ### Streamed Requests
@@ -201,6 +221,52 @@ net::request_builder()
     .url("https://httpbin.org/anything")
     .uploader<file_uploader>("image.jpeg")
     .send().wait();
+```
+
+## Promised Requests
+
+Also, you can easily integrate promises like a [promise.hpp](https://github.com/BlackMATov/promise.hpp).
+
+```cpp
+#include <curly.hpp/curly.hpp>
+namespace net = curly_hpp;
+
+#include <promise.hpp/promise.hpp>
+namespace netex = promise_hpp;
+
+netex::promise<net::content_t> download(std::string url) {
+    return netex::make_promise<net::content_t>([
+        url = std::move(url)
+    ](auto resolve, auto reject){
+        net::request_builder(std::move(url))
+            .callback([resolve,reject](net::request request) mutable {
+                if ( !request.is_done() ) {
+                    reject(net::exception("network error"));
+                    return;
+                }
+                net::response response = request.get();
+                if ( response.is_http_error() ) {
+                    reject(net::exception("server error"));
+                    return;
+                }
+                resolve(std::move(response.content));
+            }).send();
+    });
+}
+
+auto promise = download("https://httpbin.org/image/png")
+    .then([](const net::content_t& content){
+        std::cout << content.size() << " bytes downloaded" << std::endl;
+    }).except([](std::exception_ptr e){
+        try {
+            std::rethrow_exception(e);
+        } catch (const std::exception& ee) {
+            std::cerr << "Failed to download: " << ee.what() << std::endl;
+        }
+    });
+
+promise.wait();
+// 8090 bytes downloaded
 ```
 
 ## API

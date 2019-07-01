@@ -18,6 +18,7 @@
 #include <string>
 #include <vector>
 #include <stdexcept>
+#include <functional>
 
 namespace curly_hpp
 {
@@ -41,12 +42,15 @@ namespace curly_hpp
         post
     };
 
-    using response_code_t = std::uint16_t;
+    using http_code_t = std::uint16_t;
     using headers_t = std::map<std::string, std::string, icase_string_compare>;
 
     using time_sec_t = std::chrono::seconds;
     using time_ms_t = std::chrono::milliseconds;
     using time_point_t = std::chrono::steady_clock::time_point;
+
+    class request;
+    using callback_t = std::function<void(request)>;
 
     class upload_handler {
     public:
@@ -103,15 +107,17 @@ namespace curly_hpp
         response(const response&) = delete;
         response& operator=(const response&) = delete;
 
-        explicit response(response_code_t rc) noexcept;
-        response_code_t code() const noexcept;
+        explicit response(http_code_t c) noexcept;
+
+        bool is_http_error() const noexcept;
+        http_code_t http_code() const noexcept;
     public:
         content_t content;
         headers_t headers;
         uploader_uptr uploader;
         downloader_uptr downloader;
     private:
-        response_code_t code_{0u};
+        http_code_t http_code_{0u};
     };
 }
 
@@ -136,12 +142,20 @@ namespace curly_hpp
         bool cancel() noexcept;
         statuses status() const noexcept;
 
+        bool is_done() const noexcept;
+        bool is_pending() const noexcept;
+
         statuses wait() const noexcept;
         statuses wait_for(time_ms_t ms) const noexcept;
         statuses wait_until(time_point_t tp) const noexcept;
 
+        statuses wait_callback() const noexcept;
+        statuses wait_callback_for(time_ms_t ms) const noexcept;
+        statuses wait_callback_until(time_point_t tp) const noexcept;
+
         response get();
         const std::string& get_error() const noexcept;
+        std::exception_ptr get_callback_exception() const noexcept;
     private:
         internal_state_ptr state_;
     };
@@ -170,12 +184,13 @@ namespace curly_hpp
         request_builder& verbose(bool v) noexcept;
         request_builder& verification(bool v) noexcept;
         request_builder& redirections(std::uint32_t r) noexcept;
-        request_builder& request_timeout(time_sec_t t) noexcept;
-        request_builder& response_timeout(time_sec_t t) noexcept;
-        request_builder& connection_timeout(time_sec_t t) noexcept;
+        request_builder& request_timeout(time_ms_t t) noexcept;
+        request_builder& response_timeout(time_ms_t t) noexcept;
+        request_builder& connection_timeout(time_ms_t t) noexcept;
 
         request_builder& content(std::string_view b);
         request_builder& content(content_t b) noexcept;
+        request_builder& callback(callback_t c) noexcept;
         request_builder& uploader(uploader_uptr u) noexcept;
         request_builder& downloader(downloader_uptr d) noexcept;
 
@@ -186,12 +201,15 @@ namespace curly_hpp
         bool verbose() const noexcept;
         bool verification() const noexcept;
         std::uint32_t redirections() const noexcept;
-        time_sec_t request_timeout() const noexcept;
-        time_sec_t response_timeout() const noexcept;
-        time_sec_t connection_timeout() const noexcept;
+        time_ms_t request_timeout() const noexcept;
+        time_ms_t response_timeout() const noexcept;
+        time_ms_t connection_timeout() const noexcept;
 
         content_t& content() noexcept;
         const content_t& content() const noexcept;
+
+        callback_t& callback() noexcept;
+        const callback_t& callback() const noexcept;
 
         uploader_uptr& uploader() noexcept;
         const uploader_uptr& uploader() const noexcept;
@@ -201,16 +219,22 @@ namespace curly_hpp
 
         request send();
 
+        template < typename Callback >
+        request_builder& callback(Callback&& f) {
+            static_assert(std::is_convertible_v<Callback, callback_t>);
+            return callback(callback_t(std::forward<Callback>(f)));
+        }
+
         template < typename Uploader, typename... Args >
         request_builder& uploader(Args&&... args) {
-            return uploader(std::make_unique<Uploader>(
-                std::forward<Args>(args)...));
+            static_assert(std::is_base_of_v<upload_handler, Uploader>);
+            return uploader(std::make_unique<Uploader>(std::forward<Args>(args)...));
         }
 
         template < typename Downloader, typename... Args >
         request_builder& downloader(Args&&... args) {
-            return downloader(std::make_unique<Downloader>(
-                std::forward<Args>(args)...));
+            static_assert(std::is_base_of_v<download_handler, Downloader>);
+            return downloader(std::make_unique<Downloader>(std::forward<Args>(args)...));
         }
     private:
         std::string url_;
@@ -219,11 +243,12 @@ namespace curly_hpp
         bool verbose_{false};
         bool verification_{false};
         std::uint32_t redirections_{10u};
-        time_sec_t request_timeout_{~0u};
-        time_sec_t response_timeout_{60u};
-        time_sec_t connection_timeout_{20u};
+        time_ms_t request_timeout_{time_sec_t{~0u}};
+        time_ms_t response_timeout_{time_sec_t{60u}};
+        time_ms_t connection_timeout_{time_sec_t{20u}};
     private:
         content_t content_;
+        callback_t callback_;
         uploader_uptr uploader_;
         downloader_uptr downloader_;
     };
