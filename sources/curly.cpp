@@ -47,9 +47,8 @@ namespace
     public:
         using data_t = std::vector<char>;
 
-        default_uploader(const data_t* src, std::mutex* m) noexcept
+        default_uploader(const data_t* src) noexcept
         : data_(*src)
-        , mutex_(*m)
         , size_(src->size()) {}
 
         std::size_t size() const override {
@@ -57,7 +56,6 @@ namespace
         }
 
         std::size_t read(char* dst, std::size_t size) override {
-            std::lock_guard<std::mutex> guard(mutex_);
             assert(size <= data_.size() - uploaded_);
             std::memcpy(dst, data_.data() + uploaded_, size);
             uploaded_ += size;
@@ -65,7 +63,6 @@ namespace
         }
     private:
         const data_t& data_;
-        std::mutex& mutex_;
         std::size_t uploaded_{0};
         const std::atomic_size_t size_{0};
     };
@@ -74,18 +71,15 @@ namespace
     public:
         using data_t = std::vector<char>;
 
-        default_downloader(data_t* dst, std::mutex* m) noexcept
-        : data_(*dst)
-        , mutex_(*m) {}
+        default_downloader(data_t* dst) noexcept
+        : data_(*dst) {}
 
         std::size_t write(const char* src, std::size_t size) override {
-            std::lock_guard<std::mutex> guard(mutex_);
             data_.insert(data_.end(), src, src + size);
             return size;
         }
     private:
         data_t& data_;
-        std::mutex& mutex_;
     };
 }
 
@@ -323,11 +317,11 @@ namespace curly_hpp
         : breq_(std::move(rb))
         {
             if ( !breq_.uploader() ) {
-                breq_.uploader<default_uploader>(&breq_.content().data(), &mutex_);
+                breq_.uploader<default_uploader>(&breq_.content().data());
             }
 
             if ( !breq_.downloader() ) {
-                breq_.downloader<default_downloader>(&response_content_, &mutex_);
+                breq_.downloader<default_downloader>(&response_content_);
             }
         }
 
@@ -620,16 +614,15 @@ namespace curly_hpp
             return self->header_callback_(buffer, size * nitems);
         }
     private:
-        void response_callback_() noexcept {
-            std::lock_guard<std::mutex> guard(mutex_);
-            last_response_ = time_point_t::clock::now();
-        }
-
         std::size_t upload_callback_(char* dst, std::size_t size) noexcept {
             try {
-                size = std::min(size, breq_.uploader()->size() - uploaded_.load());
+                std::lock_guard<std::mutex> guard(mutex_);
+                last_response_ = time_point_t::clock::now();
+
+                size = std::min(size, breq_.uploader()->size() - uploaded_);
                 const std::size_t read_bytes = breq_.uploader()->read(dst, size);
-                uploaded_.fetch_add(read_bytes);
+                uploaded_ += read_bytes;
+
                 return read_bytes;
             } catch (...) {
                 return CURL_READFUNC_ABORT;
@@ -638,8 +631,12 @@ namespace curly_hpp
 
         std::size_t download_callback_(const char* src, std::size_t size) noexcept {
             try {
+                std::lock_guard<std::mutex> guard(mutex_);
+                last_response_ = time_point_t::clock::now();
+
                 const std::size_t written_bytes = breq_.downloader()->write(src, size);
-                downloaded_.fetch_add(written_bytes);
+                downloaded_ += written_bytes;
+                
                 return written_bytes;
             } catch (...) {
                 return 0u;
@@ -649,6 +646,8 @@ namespace curly_hpp
         std::size_t header_callback_(const char* src, std::size_t size) noexcept {
             try {
                 std::lock_guard<std::mutex> guard(mutex_);
+                last_response_ = time_point_t::clock::now();
+
                 const std::string_view header(src, size);
                 if ( !header.compare(0u, 5u, "HTTP/") ) {
                     response_headers_.clear();
@@ -663,6 +662,7 @@ namespace curly_hpp
                         response_headers_.emplace(key, val);
                     }
                 }
+
                 return header.size();
             } catch (...) {
                 return 0;
@@ -679,8 +679,8 @@ namespace curly_hpp
         headers_t response_headers_;
         std::vector<char> response_content_;
     private:
-        std::atomic_size_t uploaded_{0u};
-        std::atomic_size_t downloaded_{0u};
+        std::size_t uploaded_{0u};
+        std::size_t downloaded_{0u};
     private:
         bool callbacked_{false};
         std::exception_ptr callback_exception_{nullptr};
