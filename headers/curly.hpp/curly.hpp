@@ -184,9 +184,9 @@ namespace curly_hpp
         request_builder& verbose(bool v) noexcept;
         request_builder& verification(bool v) noexcept;
         request_builder& redirections(std::uint32_t r) noexcept;
-        request_builder& request_timeout(time_sec_t t) noexcept;
-        request_builder& response_timeout(time_sec_t t) noexcept;
-        request_builder& connection_timeout(time_sec_t t) noexcept;
+        request_builder& request_timeout(time_ms_t t) noexcept;
+        request_builder& response_timeout(time_ms_t t) noexcept;
+        request_builder& connection_timeout(time_ms_t t) noexcept;
 
         request_builder& content(std::string_view b);
         request_builder& content(content_t b) noexcept;
@@ -201,9 +201,9 @@ namespace curly_hpp
         bool verbose() const noexcept;
         bool verification() const noexcept;
         std::uint32_t redirections() const noexcept;
-        time_sec_t request_timeout() const noexcept;
-        time_sec_t response_timeout() const noexcept;
-        time_sec_t connection_timeout() const noexcept;
+        time_ms_t request_timeout() const noexcept;
+        time_ms_t response_timeout() const noexcept;
+        time_ms_t connection_timeout() const noexcept;
 
         content_t& content() noexcept;
         const content_t& content() const noexcept;
@@ -243,9 +243,9 @@ namespace curly_hpp
         bool verbose_{false};
         bool verification_{false};
         std::uint32_t redirections_{10u};
-        time_sec_t request_timeout_{~0u};
-        time_sec_t response_timeout_{60u};
-        time_sec_t connection_timeout_{20u};
+        time_ms_t request_timeout_{time_sec_t{~0u}};
+        time_ms_t response_timeout_{time_sec_t{60u}};
+        time_ms_t connection_timeout_{time_sec_t{20u}};
     private:
         content_t content_;
         callback_t callback_;

@@ -401,14 +401,14 @@ namespace curly_hpp
                 curl_easy_setopt(curlh_.get(), CURLOPT_FOLLOWLOCATION, 0l);
             }
 
-            curl_easy_setopt(curlh_.get(), CURLOPT_TIMEOUT,
-                static_cast<long>(std::max(time_sec_t(1), breq_.request_timeout()).count()));
+            curl_easy_setopt(curlh_.get(), CURLOPT_TIMEOUT_MS,
+                static_cast<long>(std::max(time_ms_t(1), breq_.request_timeout()).count()));
 
-            curl_easy_setopt(curlh_.get(), CURLOPT_CONNECTTIMEOUT,
-                static_cast<long>(std::max(time_sec_t(1), breq_.connection_timeout()).count()));
+            curl_easy_setopt(curlh_.get(), CURLOPT_CONNECTTIMEOUT_MS,
+                static_cast<long>(std::max(time_ms_t(1), breq_.connection_timeout()).count()));
 
             last_response_ = time_point_t::clock::now();
-            response_timeout_ = std::max(time_sec_t(1), breq_.response_timeout());
+            response_timeout_ = std::max(time_ms_t(1), breq_.response_timeout());
 
             if ( CURLM_OK != curl_multi_add_handle(curlm, curlh_.get()) ) {
                 throw exception("curly_hpp: failed to curl_multi_add_handle");
@@ -636,7 +636,7 @@ namespace curly_hpp
 
                 const std::size_t written_bytes = breq_.downloader()->write(src, size);
                 downloaded_ += written_bytes;
-                
+
                 return written_bytes;
             } catch (...) {
                 return 0u;
@@ -801,17 +801,17 @@ namespace curly_hpp
         return *this;
     }
 
-    request_builder& request_builder::request_timeout(time_sec_t t) noexcept {
+    request_builder& request_builder::request_timeout(time_ms_t t) noexcept {
         request_timeout_ = t;
         return *this;
     }
 
-    request_builder& request_builder::response_timeout(time_sec_t t) noexcept {
+    request_builder& request_builder::response_timeout(time_ms_t t) noexcept {
         response_timeout_ = t;
         return *this;
     }
 
-    request_builder& request_builder::connection_timeout(time_sec_t t) noexcept {
+    request_builder& request_builder::connection_timeout(time_ms_t t) noexcept {
         connection_timeout_ = t;
         return *this;
     }
@@ -865,15 +865,15 @@ namespace curly_hpp
         return redirections_;
     }
 
-    time_sec_t request_builder::request_timeout() const noexcept {
+    time_ms_t request_builder::request_timeout() const noexcept {
         return request_timeout_;
     }
 
-    time_sec_t request_builder::response_timeout() const noexcept {
+    time_ms_t request_builder::response_timeout() const noexcept {
         return response_timeout_;
     }
 
-    time_sec_t request_builder::connection_timeout() const noexcept {
+    time_ms_t request_builder::connection_timeout() const noexcept {
         return connection_timeout_;
     }
 
