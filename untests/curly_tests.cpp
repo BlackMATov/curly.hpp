@@ -16,6 +16,9 @@ namespace json = rapidjson;
 #include <curly.hpp/curly.hpp>
 namespace net = curly_hpp;
 
+#include <promise.hpp/promise.hpp>
+namespace netex = promise_hpp;
+
 #include "png_data.h"
 #include "jpeg_data.h"
 
