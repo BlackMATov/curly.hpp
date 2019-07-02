@@ -206,6 +206,7 @@ namespace curly_hpp
 
         bool verbose() const noexcept;
         bool verification() const noexcept;
+        const std::string& verification_capath() const noexcept;
         std::uint32_t redirections() const noexcept;
         time_ms_t request_timeout() const noexcept;
         time_ms_t response_timeout() const noexcept;
@@ -247,6 +248,7 @@ namespace curly_hpp
         std::string proxy_;
         std::string proxy_user_;
         std::string proxy_passw_;
+        std::string capath_;
         methods method_{methods::get};
         headers_t headers_;
         bool verbose_{false};

@@ -1,0 +1,6 @@
+[requires]
+libcurl/7.65.0@snowsoftware/agent
+[generators]
+cmake
+cmake_paths
+cmake_find_package

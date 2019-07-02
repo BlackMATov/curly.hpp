@@ -813,44 +813,68 @@ TEST_CASE("proxy") {
     net::auto_performer performer;
 
     {
-        auto ipinfo_req = net::request_builder()
-                .method(net::methods::get)
-                .url("http://ipinfo.io")
-                .send();
-
-        // synchronous waits and get a response
-        auto ipinfo_resp = ipinfo_req.get();
-        const auto ipinfo = json_parse(ipinfo_resp.content.as_string_view());
-        REQUIRE(ipinfo_resp.code() == 200u);
-
-        SECTION("Without proxy")
-        {
-            auto req = net::request_builder()
-                    .url("https://httpbin.org/get?show_env")
+        try {
+            auto ipinfo_req = net::request_builder()
                     .method(net::methods::get)
+                    .url("https://ipinfo.io")
                     .send();
-            const auto resp = req.get();
-            const auto resp_content = json_parse(resp.content.as_string_view());
-            REQUIRE(resp.code() == 200u);
-            REQUIRE(resp_content["headers"]["X-Real-Ip"] == ipinfo["ip"]);
+
+            // synchronous waits and get a response
+            const char* default_ip = R"({"ip":"0.0.0.0"})";
+            json::Document ipinfo;
+            ipinfo.Parse(default_ip);
+            try {
+                auto ipinfo_resp = ipinfo_req.get();
+                ipinfo = json_parse(ipinfo_resp.content.as_string_view());
+                REQUIRE(ipinfo_resp.http_code() == 200u);
+            }
+            catch (net::exception& e)
+            {
+                auto error = ipinfo_req.get_error();
+                FAIL("Request failed with: " + error);
+            }
+
+            SECTION("Without proxy")
+            {
+                auto req = net::request_builder()
+                        .url("https://httpbin.org/get?show_env")
+                        .method(net::methods::get)
+                        .send();
+                try {
+                    const auto resp = req.get();
+                    const auto resp_content = json_parse(resp.content.as_string_view());
+                    REQUIRE(resp.http_code() == 200u);
+                    REQUIRE(resp_content["headers"]["X-Real-Ip"] == ipinfo["ip"]);
+                }
+                catch (net::exception& e)
+                {
+                    auto error = req.get_error();
+                    FAIL("Request failed with: " + error);
+                }
+            }
+            SECTION("With proxy")
+            {
+                auto proxy_req = net::request_builder()
+                        .url("https://gimmeproxy.com/api/getProxy")
+                        .method(net::methods::get)
+                        .send();
+                const auto proxy_content = json_parse(proxy_req.get().content.as_string_view());
+
+                auto req = net::request_builder()
+                        .url("https://httpbin.org/get?show_env")
+                        .method(net::methods::get)
+                        .proxy(proxy_content["curl"].GetString())
+                        .send();
+                const auto resp = req.get();
+                const auto resp_content = json_parse(resp.content.as_string_view());
+                REQUIRE(resp.http_code() == 200u);
+                REQUIRE(resp_content["headers"]["X-Real-Ip"] != ipinfo["ip"]);
+            }
         }
-        SECTION("With proxy")
+        catch (net::exception& e)
         {
-            auto proxy_req = net::request_builder()
-                    .url("https://gimmeproxy.com/api/getProxy")
-                    .method(net::methods::get)
-                    .send();
-            const auto proxy_content = json_parse(proxy_req.get().content.as_string_view());
-
-            auto req = net::request_builder()
-                    .url("https://httpbin.org/get?show_env")
-                    .method(net::methods::get)
-                    .proxy(proxy_content["curl"].GetString())
-                    .send();
-            const auto resp = req.get();
-            const auto resp_content = json_parse(resp.content.as_string_view());
-            REQUIRE(resp.code() == 200u);
-            REQUIRE(resp_content["headers"]["X-Real-Ip"] != ipinfo["ip"]);
+            std::cout << "exception: " << e.what();
+            FAIL("Caught exception!");
         }
     }
 }

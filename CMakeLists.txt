@@ -9,6 +9,7 @@ project(curly.hpp)
 
 option(USE_STATIC_CRT "Use static C runtime library" OFF)
 option(USE_SYSTEM_CURL "Build with cURL from system paths" OFF)
+option(USE_CONAN_CURL "Build with libcurl from conan package manager" OFF)
 option(USE_EMBEDDED_CURL "Build with embedded cURL library" ON)
 
 #
@@ -75,6 +76,19 @@ target_compile_options(${PROJECT_NAME}
 
 find_package(Threads REQUIRED)
 target_link_libraries(${PROJECT_NAME} PUBLIC Threads::Threads)
+
+if(USE_CONAN_CURL)
+    # Conan set-up so we can find 3rd party libraries
+    if(EXISTS ${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
+        include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
+        include(${CMAKE_BINARY_DIR}/conan_paths.cmake)
+        conan_basic_setup(NO_OUTPUT_DIRS KEEP_RPATHS SKIP_FPIC)
+    else()
+        message(FATAL_ERROR "The file conanbuildinfo.cmake doesn't exist, run conan install first")
+    endif()
+    find_package(libcurl REQUIRED)
+    target_link_libraries(${PROJECT_NAME} PUBLIC libcurl::libcurl)
+endif()
 
 if(USE_SYSTEM_CURL)
     find_package(CURL REQUIRED)

@@ -389,8 +389,10 @@ namespace curly_hpp
                 curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYPEER, 1l);
                 curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYHOST, 2l);
             } else {
+#ifndef __APPLE__
                 curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYPEER, 0l);
                 curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYHOST, 0l);
+#endif
             }
 
             if ( breq_.redirections() ) {
@@ -412,6 +414,9 @@ namespace curly_hpp
             }
             if ( !breq_.proxy_password().empty() ) {
                 curl_easy_setopt(curlh_.get(), CURLOPT_PROXYPASSWORD, breq_.proxy_password().c_str());
+            }
+            if ( !breq_.verification_capath().empty() ) {
+                curl_easy_setopt(curlh_.get(), CURLOPT_CAINFO, breq_.verification_capath().c_str());
             }
 
             curl_easy_setopt(curlh_.get(), CURLOPT_CONNECTTIMEOUT_MS,
@@ -801,6 +806,11 @@ namespace curly_hpp
         return *this;
     }
 
+    request_builder& request_builder::verification_capath(std::string p) noexcept {
+        capath_ = std::move(p);
+        return *this;
+    }
+
     request_builder& request_builder::method(methods m) noexcept {
         method_ = m;
         return *this;
@@ -896,6 +906,10 @@ namespace curly_hpp
 
     bool request_builder::verification() const noexcept {
         return verification_;
+    }
+
+    const std::string& request_builder::verification_capath() const noexcept {
+        return capath_;
     }
 
     std::uint32_t request_builder::redirections() const noexcept {
