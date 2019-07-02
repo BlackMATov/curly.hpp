@@ -404,6 +404,16 @@ namespace curly_hpp
             curl_easy_setopt(curlh_.get(), CURLOPT_TIMEOUT_MS,
                 static_cast<long>(std::max(time_ms_t(1), breq_.request_timeout()).count()));
 
+            if ( !breq_.proxy().empty() ) {
+                curl_easy_setopt(curlh_.get(), CURLOPT_PROXY, breq_.proxy().c_str());
+            }
+            if ( !breq_.proxy_username().empty() ) {
+                curl_easy_setopt(curlh_.get(), CURLOPT_PROXYUSERNAME, breq_.proxy_username().c_str());
+            }
+            if ( !breq_.proxy_password().empty() ) {
+                curl_easy_setopt(curlh_.get(), CURLOPT_PROXYPASSWORD, breq_.proxy_password().c_str());
+            }
+
             curl_easy_setopt(curlh_.get(), CURLOPT_CONNECTTIMEOUT_MS,
                 static_cast<long>(std::max(time_ms_t(1), breq_.connection_timeout()).count()));
 
@@ -776,6 +786,21 @@ namespace curly_hpp
         return *this;
     }
 
+    request_builder& request_builder::proxy(std::string p) noexcept {
+        proxy_ = std::move(p);
+        return *this;
+    }
+
+    request_builder& request_builder::proxy_username(std::string u) noexcept {
+        proxy_user_ = std::move(u);
+        return *this;
+    }
+
+    request_builder& request_builder::proxy_password(std::string p) noexcept {
+        proxy_passw_ = std::move(p);
+        return *this;
+    }
+
     request_builder& request_builder::method(methods m) noexcept {
         method_ = m;
         return *this;
@@ -843,6 +868,18 @@ namespace curly_hpp
 
     const std::string& request_builder::url() const noexcept {
         return url_;
+    }
+
+    const std::string& request_builder::proxy() const noexcept {
+        return proxy_;
+    }
+
+    const std::string& request_builder::proxy_username() const noexcept {
+        return proxy_user_;
+    }
+
+    const std::string& request_builder::proxy_password() const noexcept {
+        return proxy_passw_;
     }
 
     methods request_builder::method() const noexcept {

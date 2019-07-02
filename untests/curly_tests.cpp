@@ -808,3 +808,49 @@ TEST_CASE("curly_examples") {
         // 8090 bytes downloaded
     }
 }
+
+TEST_CASE("proxy") {
+    net::auto_performer performer;
+
+    {
+        auto ipinfo_req = net::request_builder()
+                .method(net::methods::get)
+                .url("http://ipinfo.io")
+                .send();
+
+        // synchronous waits and get a response
+        auto ipinfo_resp = ipinfo_req.get();
+        const auto ipinfo = json_parse(ipinfo_resp.content.as_string_view());
+        REQUIRE(ipinfo_resp.code() == 200u);
+
+        SECTION("Without proxy")
+        {
+            auto req = net::request_builder()
+                    .url("https://httpbin.org/get?show_env")
+                    .method(net::methods::get)
+                    .send();
+            const auto resp = req.get();
+            const auto resp_content = json_parse(resp.content.as_string_view());
+            REQUIRE(resp.code() == 200u);
+            REQUIRE(resp_content["headers"]["X-Real-Ip"] == ipinfo["ip"]);
+        }
+        SECTION("With proxy")
+        {
+            auto proxy_req = net::request_builder()
+                    .url("https://gimmeproxy.com/api/getProxy")
+                    .method(net::methods::get)
+                    .send();
+            const auto proxy_content = json_parse(proxy_req.get().content.as_string_view());
+
+            auto req = net::request_builder()
+                    .url("https://httpbin.org/get?show_env")
+                    .method(net::methods::get)
+                    .proxy(proxy_content["curl"].GetString())
+                    .send();
+            const auto resp = req.get();
+            const auto resp_content = json_parse(resp.content.as_string_view());
+            REQUIRE(resp.code() == 200u);
+            REQUIRE(resp_content["headers"]["X-Real-Ip"] != ipinfo["ip"]);
+        }
+    }
+}

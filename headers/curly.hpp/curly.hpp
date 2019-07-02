@@ -180,6 +180,9 @@ namespace curly_hpp
         request_builder& url(std::string u) noexcept;
         request_builder& method(methods m) noexcept;
         request_builder& header(std::string key, std::string value);
+        request_builder& proxy(std::string p) noexcept;
+        request_builder& proxy_username(std::string u) noexcept;
+        request_builder& proxy_password(std::string p) noexcept;
 
         request_builder& verbose(bool v) noexcept;
         request_builder& verification(bool v) noexcept;
@@ -195,6 +198,9 @@ namespace curly_hpp
         request_builder& downloader(downloader_uptr d) noexcept;
 
         const std::string& url() const noexcept;
+        const std::string& proxy() const noexcept;
+        const std::string& proxy_username() const noexcept;
+        const std::string& proxy_password() const noexcept;
         methods method() const noexcept;
         const headers_t& headers() const noexcept;
 
@@ -238,6 +244,9 @@ namespace curly_hpp
         }
     private:
         std::string url_;
+        std::string proxy_;
+        std::string proxy_user_;
+        std::string proxy_passw_;
         methods method_{methods::get};
         headers_t headers_;
         bool verbose_{false};
