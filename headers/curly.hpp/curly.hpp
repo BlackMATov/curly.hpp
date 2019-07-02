@@ -186,6 +186,7 @@ namespace curly_hpp
 
         request_builder& verbose(bool v) noexcept;
         request_builder& verification(bool v) noexcept;
+        request_builder& verification_capath(std::string p) noexcept;
         request_builder& redirections(std::uint32_t r) noexcept;
         request_builder& request_timeout(time_ms_t t) noexcept;
         request_builder& response_timeout(time_ms_t t) noexcept;
