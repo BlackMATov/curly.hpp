@@ -51,9 +51,22 @@ endif()
 # library
 #
 
+file(GLOB_RECURSE CURLY_HPP_HEADERS
+    headers/curly.hpp/*.hpp
+    headers/curly.hpp/*.inl)
+
+file(GLOB_RECURSE CURLY_HPP_SOURCES
+    sources/curly.hpp/*.cpp
+    sources/curly.hpp/*.hpp
+    sources/curly.hpp/*.inl)
+
 add_library(${PROJECT_NAME} STATIC
-    headers/curly.hpp/curly.hpp
-    sources/curly.cpp)
+    ${CURLY_HPP_HEADERS}
+    ${CURLY_HPP_SOURCES})
+
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES
+    ${CURLY_HPP_HEADERS}
+    ${CURLY_HPP_SOURCES})
 
 target_include_directories(${PROJECT_NAME}
     PUBLIC headers)
