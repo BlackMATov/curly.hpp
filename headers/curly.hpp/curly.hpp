@@ -289,25 +289,33 @@ namespace curly_hpp
 
         template < typename Callback >
         request_builder& callback(Callback&& f) {
-            static_assert(std::is_convertible_v<Callback, callback_t>);
+            static_assert(
+                std::is_convertible_v<Callback, callback_t>,
+                "custom callback type error");
             return callback(callback_t(std::forward<Callback>(f)));
         }
 
         template < typename Uploader, typename... Args >
         request_builder& uploader(Args&&... args) {
-            static_assert(std::is_base_of_v<upload_handler, Uploader>);
+            static_assert(
+                std::is_base_of_v<upload_handler, Uploader>,
+                "custom uploader type error");
             return uploader(std::make_unique<Uploader>(std::forward<Args>(args)...));
         }
 
         template < typename Downloader, typename... Args >
         request_builder& downloader(Args&&... args) {
-            static_assert(std::is_base_of_v<download_handler, Downloader>);
+            static_assert(
+                std::is_base_of_v<download_handler, Downloader>,
+                "custom downloader type error");
             return downloader(std::make_unique<Downloader>(std::forward<Args>(args)...));
         }
 
         template < typename Progressor, typename... Args >
         request_builder& progressor(Args&&... args) {
-            static_assert(std::is_base_of_v<progress_handler, Progressor>);
+            static_assert(
+                std::is_base_of_v<progress_handler, Progressor>,
+                "custom progressor type error");
             return progressor(std::make_unique<Progressor>(std::forward<Args>(args)...));
         }
     private:
