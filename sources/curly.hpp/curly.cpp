@@ -848,13 +848,13 @@ namespace curly_hpp
 
 // -----------------------------------------------------------------------------
 //
-// auto_performer
+// performer
 //
 // -----------------------------------------------------------------------------
 
 namespace curly_hpp
 {
-    auto_performer::auto_performer() {
+    performer::performer() {
         thread_ = std::thread([this](){
             while ( !done_ ) {
                 curly_hpp::perform();
@@ -863,18 +863,18 @@ namespace curly_hpp
         });
     }
 
-    auto_performer::~auto_performer() noexcept {
+    performer::~performer() noexcept {
         done_.store(true);
         if ( thread_.joinable() ) {
             thread_.join();
         }
     }
 
-    time_ms_t auto_performer::wait_activity() const noexcept {
+    time_ms_t performer::wait_activity() const noexcept {
         return wait_activity_;
     }
 
-    void auto_performer::wait_activity(time_ms_t ms) noexcept {
+    void performer::wait_activity(time_ms_t ms) noexcept {
         wait_activity_ = ms;
     }
 }

@@ -56,7 +56,7 @@ target_link_libraries(your_project_target curly.hpp)
 namespace net = curly_hpp;
 
 // creates and hold a separate thread for automatically update async requests
-net::auto_performer performer;
+net::performer performer;
 
 // also, you can update requests manually from your favorite thread
 net::perform();

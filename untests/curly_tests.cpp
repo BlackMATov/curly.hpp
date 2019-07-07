@@ -80,7 +80,7 @@ namespace
 }
 
 TEST_CASE("curly") {
-    net::auto_performer performer;
+    net::performer performer;
     performer.wait_activity(net::time_ms_t(10));
 
     SECTION("wait") {
@@ -642,7 +642,7 @@ TEST_CASE("curly") {
 }
 
 TEST_CASE("curly_examples") {
-    net::auto_performer performer;
+    net::performer performer;
 
     SECTION("Get Requests") {
         // makes a GET request and async send it

@@ -306,10 +306,10 @@ namespace curly_hpp
 
 namespace curly_hpp
 {
-    class auto_performer final {
+    class performer final {
     public:
-        auto_performer();
-        ~auto_performer() noexcept;
+        performer();
+        ~performer() noexcept;
 
         time_ms_t wait_activity() const noexcept;
         void wait_activity(time_ms_t ms) noexcept;
