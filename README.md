@@ -56,7 +56,7 @@ target_link_libraries(your_project_target curly.hpp)
 namespace net = curly_hpp;
 
 // creates and hold a separate thread for automatically update async requests
-net::auto_performer performer;
+net::performer performer;
 
 // also, you can update requests manually from your favorite thread
 net::perform();
@@ -67,12 +67,12 @@ net::perform();
 ```cpp
 // makes a GET request and async send it
 auto request = net::request_builder()
-    .method(net::methods::get)
+    .method(net::http_method::GET)
     .url("http://www.httpbin.org/get")
     .send();
 
-// synchronous waits and get a response
-auto response = request.get();
+// synchronous waits and take a response
+auto response = request.take();
 
 // prints results
 std::cout << "Status code: " << response.http_code() << std::endl;
@@ -97,13 +97,13 @@ std::cout << "Body content: " << response.content.as_string_view() << std::endl;
 
 ```cpp
 auto request = net::request_builder()
-    .method(net::methods::post)
+    .method(net::http_method::POST)
     .url("http://www.httpbin.org/post")
     .header("Content-Type", "application/json")
     .content(R"({"hello" : "world"})")
     .send();
 
-auto response = request.get();
+auto response = request.take();
 std::cout << "Body content: " << response.content.as_string_view() << std::endl;
 std::cout << "Content Length: " << response.headers["content-length"] << std::endl;
 
@@ -138,11 +138,11 @@ auto request = net::request_builder()
 request.wait();
 
 if ( request.is_done() ) {
-    auto response = request.get();
+    auto response = request.take();
     std::cout << "Status code: " << response.http_code() << std::endl;
 } else {
     // throws net::exception because a response is unavailable
-    // auto response = request.get();
+    // auto response = request.take();
 
     std::cout << "Error message: " << request.get_error() << std::endl;
 }
@@ -156,7 +156,7 @@ if ( request.is_done() ) {
 auto request = net::request_builder("http://www.httpbin.org/get")
     .callback([](net::request request){
         if ( request.is_done() ) {
-            auto response = request.get();
+            auto response = request.take();
             std::cout << "Status code: " << response.http_code() << std::endl;
         } else {
             std::cout << "Error message: " << request.get_error() << std::endl;
@@ -217,7 +217,7 @@ private:
 };
 
 net::request_builder()
-    .method(net::methods::post)
+    .method(net::http_method::POST)
     .url("https://httpbin.org/anything")
     .uploader<file_uploader>("image.jpeg")
     .send().wait();

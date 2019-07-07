@@ -6,51 +6,48 @@
 
 #pragma once
 
+#include <cctype>
+#include <cassert>
+#include <cstring>
+
 #include <cstdint>
 #include <cstddef>
 
 #include <atomic>
+#include <chrono>
 #include <thread>
 
-#include <map>
-#include <chrono>
 #include <memory>
-#include <string>
-#include <vector>
+#include <utility>
+#include <algorithm>
 #include <stdexcept>
 #include <functional>
 
+#include <map>
+#include <vector>
+#include <string>
+
 namespace curly_hpp
 {
-    class exception final : public std::runtime_error {
-    public:
-        explicit exception(const char* what);
-        explicit exception(const std::string& what);
-    };
-
-    struct icase_string_compare final {
-        using is_transparent = void;
-        bool operator()(
-            std::string_view l,
-            std::string_view r) const noexcept;
-    };
-
-    enum class methods {
-        put,
-        get,
-        head,
-        post
-    };
+    class request;
+    class response;
+    class request_builder;
 
     using http_code_t = std::uint16_t;
-    using headers_t = std::map<std::string, std::string, icase_string_compare>;
 
     using time_sec_t = std::chrono::seconds;
     using time_ms_t = std::chrono::milliseconds;
     using time_point_t = std::chrono::steady_clock::time_point;
 
-    class request;
-    using callback_t = std::function<void(request)>;
+    enum class http_method {
+        DEL,
+        PUT,
+        GET,
+        HEAD,
+        POST,
+        PATCH,
+        OPTIONS
+    };
 
     class upload_handler {
     public:
@@ -65,8 +62,51 @@ namespace curly_hpp
         virtual std::size_t write(const char* src, std::size_t size) = 0;
     };
 
+    class progress_handler {
+    public:
+        virtual ~progress_handler() {}
+        virtual float update(
+            std::size_t dnow, std::size_t dtotal,
+            std::size_t unow, std::size_t utotal) = 0;
+    };
+
+    using callback_t = std::function<void(request)>;
     using uploader_uptr = std::unique_ptr<upload_handler>;
     using downloader_uptr = std::unique_ptr<download_handler>;
+    using progressor_uptr = std::unique_ptr<progress_handler>;
+}
+
+namespace curly_hpp
+{
+    class exception final : public std::runtime_error {
+    public:
+        explicit exception(const char* what)
+        : std::runtime_error(what) {}
+
+        explicit exception(const std::string& what)
+        : std::runtime_error(what) {}
+    };
+}
+
+namespace curly_hpp
+{
+    namespace detail
+    {
+        struct icase_string_compare final {
+            using is_transparent = void;
+            bool operator()(std::string_view l, std::string_view r) const noexcept {
+                return std::lexicographical_compare(
+                    l.begin(), l.end(), r.begin(), r.end(),
+                    [](const char lc, const char rc) noexcept {
+                        return std::tolower(lc) < std::tolower(rc);
+                    });
+            }
+        };
+    }
+
+    using headers_t = std::map<
+        std::string, std::string,
+        detail::icase_string_compare>;
 }
 
 namespace curly_hpp
@@ -81,15 +121,31 @@ namespace curly_hpp
         content_t(const content_t&) = default;
         content_t& operator=(const content_t&) = default;
 
-        content_t(std::string_view data);
-        content_t(std::vector<char> data) noexcept;
+        content_t(std::string_view data)
+        : data_(data.cbegin(), data.cend() ) {}
 
-        std::size_t size() const noexcept;
-        std::vector<char>& data() noexcept;
-        const std::vector<char>& data() const noexcept;
+        content_t(std::vector<char> data) noexcept
+        : data_(std::move(data)) {}
 
-        std::string as_string_copy() const;
-        std::string_view as_string_view() const noexcept;
+        std::size_t size() const noexcept {
+            return data_.size();
+        }
+
+        std::vector<char>& data() noexcept {
+            return data_;
+        }
+
+        const std::vector<char>& data() const noexcept {
+            return data_;
+        }
+
+        std::string as_string_copy() const {
+            return {data_.data(), data_.size()};
+        }
+
+        std::string_view as_string_view() const noexcept {
+            return {data_.data(), data_.size()};
+        }
     private:
         std::vector<char> data_;
     };
@@ -107,15 +163,22 @@ namespace curly_hpp
         response(const response&) = delete;
         response& operator=(const response&) = delete;
 
-        explicit response(http_code_t c) noexcept;
+        explicit response(http_code_t c) noexcept
+        : http_code_(c) {}
 
-        bool is_http_error() const noexcept;
-        http_code_t http_code() const noexcept;
+        bool is_http_error() const noexcept {
+            return http_code_ >= 400u;
+        }
+
+        http_code_t http_code() const noexcept {
+            return http_code_;
+        }
     public:
         content_t content;
         headers_t headers;
         uploader_uptr uploader;
         downloader_uptr downloader;
+        progressor_uptr progressor;
     private:
         http_code_t http_code_{0u};
     };
@@ -123,16 +186,16 @@ namespace curly_hpp
 
 namespace curly_hpp
 {
+    enum class req_status {
+        done,
+        empty,
+        failed,
+        timeout,
+        pending,
+        canceled
+    };
+
     class request final {
-    public:
-        enum class statuses {
-            done,
-            empty,
-            failed,
-            timeout,
-            pending,
-            canceled
-        };
     public:
         class internal_state;
         using internal_state_ptr = std::shared_ptr<internal_state>;
@@ -140,20 +203,21 @@ namespace curly_hpp
         request(internal_state_ptr);
 
         bool cancel() noexcept;
-        statuses status() const noexcept;
+        float progress() const noexcept;
+        req_status status() const noexcept;
 
         bool is_done() const noexcept;
         bool is_pending() const noexcept;
 
-        statuses wait() const noexcept;
-        statuses wait_for(time_ms_t ms) const noexcept;
-        statuses wait_until(time_point_t tp) const noexcept;
+        req_status wait() const noexcept;
+        req_status wait_for(time_ms_t ms) const noexcept;
+        req_status wait_until(time_point_t tp) const noexcept;
 
-        statuses wait_callback() const noexcept;
-        statuses wait_callback_for(time_ms_t ms) const noexcept;
-        statuses wait_callback_until(time_point_t tp) const noexcept;
+        req_status wait_callback() const noexcept;
+        req_status wait_callback_for(time_ms_t ms) const noexcept;
+        req_status wait_callback_until(time_point_t tp) const noexcept;
 
-        response get();
+        response take();
         const std::string& get_error() const noexcept;
         std::exception_ptr get_callback_exception() const noexcept;
     private:
@@ -173,12 +237,12 @@ namespace curly_hpp
         request_builder(const request_builder&) = delete;
         request_builder& operator=(const request_builder&) = delete;
 
-        explicit request_builder(methods m) noexcept;
+        explicit request_builder(http_method m) noexcept;
         explicit request_builder(std::string u) noexcept;
-        explicit request_builder(methods m, std::string u) noexcept;
+        explicit request_builder(http_method m, std::string u) noexcept;
 
         request_builder& url(std::string u) noexcept;
-        request_builder& method(methods m) noexcept;
+        request_builder& method(http_method m) noexcept;
         request_builder& header(std::string key, std::string value);
 
         request_builder& verbose(bool v) noexcept;
@@ -193,9 +257,10 @@ namespace curly_hpp
         request_builder& callback(callback_t c) noexcept;
         request_builder& uploader(uploader_uptr u) noexcept;
         request_builder& downloader(downloader_uptr d) noexcept;
+        request_builder& progressor(progressor_uptr p) noexcept;
 
         const std::string& url() const noexcept;
-        methods method() const noexcept;
+        http_method method() const noexcept;
         const headers_t& headers() const noexcept;
 
         bool verbose() const noexcept;
@@ -217,6 +282,9 @@ namespace curly_hpp
         downloader_uptr& downloader() noexcept;
         const downloader_uptr& downloader() const noexcept;
 
+        progressor_uptr& progressor() noexcept;
+        const progressor_uptr& progressor() const noexcept;
+
         request send();
 
         template < typename Callback >
@@ -236,9 +304,15 @@ namespace curly_hpp
             static_assert(std::is_base_of_v<download_handler, Downloader>);
             return downloader(std::make_unique<Downloader>(std::forward<Args>(args)...));
         }
+
+        template < typename Progressor, typename... Args >
+        request_builder& progressor(Args&&... args) {
+            static_assert(std::is_base_of_v<progress_handler, Progressor>);
+            return progressor(std::make_unique<Progressor>(std::forward<Args>(args)...));
+        }
     private:
         std::string url_;
-        methods method_{methods::get};
+        http_method method_{http_method::GET};
         headers_t headers_;
         bool verbose_{false};
         bool verification_{false};
@@ -251,15 +325,16 @@ namespace curly_hpp
         callback_t callback_;
         uploader_uptr uploader_;
         downloader_uptr downloader_;
+        progressor_uptr progressor_;
     };
 }
 
 namespace curly_hpp
 {
-    class auto_performer final {
+    class performer final {
     public:
-        auto_performer();
-        ~auto_performer() noexcept;
+        performer();
+        ~performer() noexcept;
 
         time_ms_t wait_activity() const noexcept;
         void wait_activity(time_ms_t ms) noexcept;
