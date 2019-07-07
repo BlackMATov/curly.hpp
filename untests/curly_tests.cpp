@@ -230,7 +230,7 @@ TEST_CASE("curly") {
 
             auto req5 = net::request_builder()
                 .url("https://httpbin.org/put")
-                .method(net::http_method::DELETE)
+                .method(net::http_method::DEL)
                 .send();
             REQUIRE(req5.take().http_code() == 405u);
         }
@@ -267,7 +267,7 @@ TEST_CASE("curly") {
 
             auto req5 = net::request_builder()
                 .url("https://httpbin.org/get")
-                .method(net::http_method::DELETE)
+                .method(net::http_method::DEL)
                 .send();
             REQUIRE(req5.take().http_code() == 405u);
         }
@@ -304,7 +304,7 @@ TEST_CASE("curly") {
 
             auto req5 = net::request_builder()
                 .url("https://httpbin.org/post")
-                .method(net::http_method::DELETE)
+                .method(net::http_method::DEL)
                 .send();
             REQUIRE(req5.take().http_code() == 405u);
         }
@@ -364,7 +364,7 @@ TEST_CASE("curly") {
         {
             auto req = net::request_builder()
                 .url("https://httpbin.org/status/203")
-                .method(net::http_method::DELETE)
+                .method(net::http_method::DEL)
                 .send();
             REQUIRE(req.take().http_code() == 203u);
         }
@@ -589,7 +589,7 @@ TEST_CASE("curly") {
         {
             auto resp = net::request_builder()
                 .url("https://httpbin.org/anything")
-                .method(net::http_method::DELETE)
+                .method(net::http_method::DEL)
                 .header("Content-Type", "application/json")
                 .content(R"({"hello":"world"})")
                 .send().take();

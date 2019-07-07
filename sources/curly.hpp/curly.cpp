@@ -320,6 +320,12 @@ namespace curly_hpp
             curl_easy_setopt(curlh_.get(), CURLOPT_VERBOSE, breq_.verbose() ? 1l : 0l);
 
             switch ( breq_.method() ) {
+            case http_method::DEL:
+                curl_easy_setopt(curlh_.get(), CURLOPT_CUSTOMREQUEST, "DELETE");
+                curl_easy_setopt(curlh_.get(), CURLOPT_POST, 1l);
+                curl_easy_setopt(curlh_.get(), CURLOPT_POSTFIELDSIZE_LARGE,
+                    static_cast<curl_off_t>(breq_.uploader()->size()));
+                break;
             case http_method::PUT:
                 curl_easy_setopt(curlh_.get(), CURLOPT_UPLOAD, 1l);
                 curl_easy_setopt(curlh_.get(), CURLOPT_INFILESIZE_LARGE,
@@ -340,12 +346,6 @@ namespace curly_hpp
                 curl_easy_setopt(curlh_.get(), CURLOPT_CUSTOMREQUEST, "PATCH");
                 curl_easy_setopt(curlh_.get(), CURLOPT_UPLOAD, 1l);
                 curl_easy_setopt(curlh_.get(), CURLOPT_INFILESIZE_LARGE,
-                    static_cast<curl_off_t>(breq_.uploader()->size()));
-                break;
-            case http_method::DELETE:
-                curl_easy_setopt(curlh_.get(), CURLOPT_CUSTOMREQUEST, "DELETE");
-                curl_easy_setopt(curlh_.get(), CURLOPT_POST, 1l);
-                curl_easy_setopt(curlh_.get(), CURLOPT_POSTFIELDSIZE_LARGE,
                     static_cast<curl_off_t>(breq_.uploader()->size()));
                 break;
             case http_method::OPTIONS:

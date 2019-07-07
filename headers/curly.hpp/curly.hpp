@@ -40,12 +40,12 @@ namespace curly_hpp
     using time_point_t = std::chrono::steady_clock::time_point;
 
     enum class http_method {
+        DEL,
         PUT,
         GET,
         HEAD,
         POST,
         PATCH,
-        DELETE,
         OPTIONS
     };
 
