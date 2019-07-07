@@ -205,6 +205,18 @@ TEST_CASE("curly") {
                 .method(net::http_method::POST)
                 .send();
             REQUIRE(req3.take().http_code() == 405u);
+
+            auto req4 = net::request_builder()
+                .url("https://httpbin.org/put")
+                .method(net::http_method::PATCH)
+                .send();
+            REQUIRE(req4.take().http_code() == 405u);
+
+            auto req5 = net::request_builder()
+                .url("https://httpbin.org/put")
+                .method(net::http_method::DELETE)
+                .send();
+            REQUIRE(req5.take().http_code() == 405u);
         }
         {
             auto req0 = net::request_builder()
@@ -230,6 +242,18 @@ TEST_CASE("curly") {
                 .method(net::http_method::POST)
                 .send();
             REQUIRE(req3.take().http_code() == 405u);
+
+            auto req4 = net::request_builder()
+                .url("https://httpbin.org/get")
+                .method(net::http_method::PATCH)
+                .send();
+            REQUIRE(req4.take().http_code() == 405u);
+
+            auto req5 = net::request_builder()
+                .url("https://httpbin.org/get")
+                .method(net::http_method::DELETE)
+                .send();
+            REQUIRE(req5.take().http_code() == 405u);
         }
         {
             auto req0 = net::request_builder()
@@ -255,6 +279,33 @@ TEST_CASE("curly") {
                 .method(net::http_method::POST)
                 .send();
             REQUIRE(req3.take().http_code() == 200u);
+
+            auto req4 = net::request_builder()
+                .url("https://httpbin.org/post")
+                .method(net::http_method::PATCH)
+                .send();
+            REQUIRE(req4.take().http_code() == 405u);
+
+            auto req5 = net::request_builder()
+                .url("https://httpbin.org/post")
+                .method(net::http_method::DELETE)
+                .send();
+            REQUIRE(req5.take().http_code() == 405u);
+        }
+        {
+            auto req1 = net::request_builder()
+                .url("https://httpbin.org/put")
+                .method(net::http_method::OPTIONS)
+                .send();
+            const auto allow1 = req1.take().headers.at("Allow");
+            REQUIRE((allow1 == "PUT, OPTIONS" || allow1 == "OPTIONS, PUT"));
+
+            auto req2 = net::request_builder()
+                .url("https://httpbin.org/post")
+                .method(net::http_method::OPTIONS)
+                .send();
+            const auto allow2 = req2.take().headers.at("Allow");
+            REQUIRE((allow2 == "POST, OPTIONS" || allow2 == "OPTIONS, POST"));
         }
     }
 
@@ -284,6 +335,20 @@ TEST_CASE("curly") {
             auto req = net::request_builder()
                 .url("https://httpbin.org/status/203")
                 .method(net::http_method::POST)
+                .send();
+            REQUIRE(req.take().http_code() == 203u);
+        }
+        {
+            auto req = net::request_builder()
+                .url("https://httpbin.org/status/203")
+                .method(net::http_method::PATCH)
+                .send();
+            REQUIRE(req.take().http_code() == 203u);
+        }
+        {
+            auto req = net::request_builder()
+                .url("https://httpbin.org/status/203")
+                .method(net::http_method::DELETE)
                 .send();
             REQUIRE(req.take().http_code() == 203u);
         }
@@ -371,11 +436,25 @@ TEST_CASE("curly") {
         {
             auto resp = net::request_builder()
                 .url("https://httpbin.org/image/png")
+                .method(net::http_method::HEAD)
+                .send().take();
+            REQUIRE(resp.http_code() == 200u);
+            REQUIRE(resp.headers.count("Content-Type"));
+            REQUIRE(resp.headers.count("Content-Length"));
+            REQUIRE(resp.headers.at("Content-Type") == "image/png");
+            REQUIRE(resp.headers.at("Content-Length") == std::to_string(untests::png_data_length));
+            REQUIRE_FALSE(resp.content.size());
+        }
+        {
+            auto resp = net::request_builder()
+                .url("https://httpbin.org/image/png")
                 .method(net::http_method::GET)
                 .send().take();
             REQUIRE(resp.http_code() == 200u);
             REQUIRE(resp.headers.count("Content-Type"));
+            REQUIRE(resp.headers.count("Content-Length"));
             REQUIRE(resp.headers.at("Content-Type") == "image/png");
+            REQUIRE(resp.headers.at("Content-Length") == std::to_string(untests::png_data_length));
             REQUIRE(untests::png_data_length == resp.content.size());
             REQUIRE(!std::memcmp(
                 std::move(resp.content).data().data(),
@@ -384,11 +463,25 @@ TEST_CASE("curly") {
         {
             auto resp = net::request_builder()
                 .url("https://httpbin.org/image/jpeg")
+                .method(net::http_method::HEAD)
+                .send().take();
+            REQUIRE(resp.http_code() == 200u);
+            REQUIRE(resp.headers.count("Content-Type"));
+            REQUIRE(resp.headers.count("Content-Length"));
+            REQUIRE(resp.headers.at("Content-Type") == "image/jpeg");
+            REQUIRE(resp.headers.at("Content-Length") == std::to_string(untests::jpeg_data_length));
+            REQUIRE_FALSE(resp.content.size());
+        }
+        {
+            auto resp = net::request_builder()
+                .url("https://httpbin.org/image/jpeg")
                 .method(net::http_method::GET)
                 .send().take();
             REQUIRE(resp.http_code() == 200u);
             REQUIRE(resp.headers.count("Content-Type"));
+            REQUIRE(resp.headers.count("Content-Length"));
             REQUIRE(resp.headers.at("Content-Type") == "image/jpeg");
+            REQUIRE(resp.headers.at("Content-Length") == std::to_string(untests::jpeg_data_length));
             REQUIRE(untests::jpeg_data_length == resp.content.size());
             REQUIRE(!std::memcmp(
                 std::as_const(resp.content).data().data(),
@@ -461,6 +554,26 @@ TEST_CASE("curly") {
             auto resp = net::request_builder()
                 .url("https://httpbin.org/anything")
                 .method(net::http_method::PUT)
+                .header("Content-Type", "application/json")
+                .content(R"({"hello":"world"})")
+                .send().take();
+            const auto content_j = json_parse(resp.content.as_string_view());
+            REQUIRE(content_j["data"] == R"({"hello":"world"})");
+        }
+        {
+            auto resp = net::request_builder()
+                .url("https://httpbin.org/anything")
+                .method(net::http_method::PATCH)
+                .header("Content-Type", "application/json")
+                .content(R"({"hello":"world"})")
+                .send().take();
+            const auto content_j = json_parse(resp.content.as_string_view());
+            REQUIRE(content_j["data"] == R"({"hello":"world"})");
+        }
+        {
+            auto resp = net::request_builder()
+                .url("https://httpbin.org/anything")
+                .method(net::http_method::DELETE)
                 .header("Content-Type", "application/json")
                 .content(R"({"hello":"world"})")
                 .send().take();

@@ -311,6 +311,22 @@ namespace curly_hpp
                 curl_easy_setopt(curlh_.get(), CURLOPT_POSTFIELDSIZE_LARGE,
                     static_cast<curl_off_t>(breq_.uploader()->size()));
                 break;
+            case http_method::PATCH:
+                curl_easy_setopt(curlh_.get(), CURLOPT_CUSTOMREQUEST, "PATCH");
+                curl_easy_setopt(curlh_.get(), CURLOPT_UPLOAD, 1l);
+                curl_easy_setopt(curlh_.get(), CURLOPT_INFILESIZE_LARGE,
+                    static_cast<curl_off_t>(breq_.uploader()->size()));
+                break;
+            case http_method::DELETE:
+                curl_easy_setopt(curlh_.get(), CURLOPT_CUSTOMREQUEST, "DELETE");
+                curl_easy_setopt(curlh_.get(), CURLOPT_POST, 1l);
+                curl_easy_setopt(curlh_.get(), CURLOPT_POSTFIELDSIZE_LARGE,
+                    static_cast<curl_off_t>(breq_.uploader()->size()));
+                break;
+            case http_method::OPTIONS:
+                curl_easy_setopt(curlh_.get(), CURLOPT_CUSTOMREQUEST, "OPTIONS");
+                curl_easy_setopt(curlh_.get(), CURLOPT_NOBODY, 1l);
+                break;
             default:
                 throw exception("curly_hpp: unexpected request method");
             }

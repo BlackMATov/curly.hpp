@@ -43,7 +43,10 @@ namespace curly_hpp
         PUT,
         GET,
         HEAD,
-        POST
+        POST,
+        PATCH,
+        DELETE,
+        OPTIONS
     };
 
     class upload_handler {
