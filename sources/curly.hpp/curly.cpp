@@ -6,13 +6,8 @@
 
 #include <curly.hpp/curly.hpp>
 
-#include <cctype>
-#include <cassert>
-#include <cstring>
-
 #include <mutex>
 #include <queue>
-#include <algorithm>
 #include <condition_variable>
 
 #ifndef NOMINMAX
@@ -211,96 +206,6 @@ namespace
 
     std::mutex curl_state::mutex_;
     std::unique_ptr<curl_state> curl_state::self_;
-}
-
-// -----------------------------------------------------------------------------
-//
-// exception
-//
-// -----------------------------------------------------------------------------
-
-namespace curly_hpp
-{
-    exception::exception(const char* what)
-    : std::runtime_error(what) {}
-
-    exception::exception(const std::string& what)
-    : std::runtime_error(what) {}
-}
-
-// -----------------------------------------------------------------------------
-//
-// icase_string_compare
-//
-// -----------------------------------------------------------------------------
-
-namespace curly_hpp
-{
-    bool icase_string_compare::operator()(
-        std::string_view l,
-        std::string_view r) const noexcept
-    {
-        return std::lexicographical_compare(
-            l.begin(), l.end(), r.begin(), r.end(),
-            [](const auto lc, const auto rc) noexcept {
-                return std::tolower(lc) < std::tolower(rc);
-            });
-    }
-}
-
-// -----------------------------------------------------------------------------
-//
-// content_t
-//
-// -----------------------------------------------------------------------------
-
-namespace curly_hpp
-{
-    content_t::content_t(std::string_view data)
-    : data_(data.cbegin(), data.cend() ) {}
-
-    content_t::content_t(std::vector<char> data) noexcept
-    : data_(std::move(data)) {}
-
-    std::size_t content_t::size() const noexcept {
-        return data_.size();
-    }
-
-    std::vector<char>& content_t::data() noexcept {
-        return data_;
-    }
-
-    const std::vector<char>& content_t::data() const noexcept {
-        return data_;
-    }
-
-    std::string content_t::as_string_copy() const {
-        return {data_.data(), data_.size()};
-    }
-
-    std::string_view content_t::as_string_view() const noexcept {
-        return {data_.data(), data_.size()};
-    }
-}
-
-// -----------------------------------------------------------------------------
-//
-// response
-//
-// -----------------------------------------------------------------------------
-
-namespace curly_hpp
-{
-    response::response(http_code_t c) noexcept
-    : http_code_(c) {}
-
-    bool response::is_http_error() const noexcept {
-        return http_code_ >= 400u;
-    }
-
-    http_code_t response::http_code() const noexcept {
-        return http_code_;
-    }
 }
 
 // -----------------------------------------------------------------------------

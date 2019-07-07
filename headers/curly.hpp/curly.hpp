@@ -6,34 +6,38 @@
 
 #pragma once
 
+#include <cctype>
+#include <cassert>
+#include <cstring>
+
 #include <cstdint>
 #include <cstddef>
 
 #include <atomic>
+#include <chrono>
 #include <thread>
 
-#include <map>
-#include <chrono>
 #include <memory>
-#include <string>
-#include <vector>
+#include <utility>
+#include <algorithm>
 #include <stdexcept>
 #include <functional>
 
+#include <map>
+#include <vector>
+#include <string>
+
 namespace curly_hpp
 {
-    class exception final : public std::runtime_error {
-    public:
-        explicit exception(const char* what);
-        explicit exception(const std::string& what);
-    };
+    class request;
+    class response;
+    class request_builder;
 
-    struct icase_string_compare final {
-        using is_transparent = void;
-        bool operator()(
-            std::string_view l,
-            std::string_view r) const noexcept;
-    };
+    using http_code_t = std::uint16_t;
+
+    using time_sec_t = std::chrono::seconds;
+    using time_ms_t = std::chrono::milliseconds;
+    using time_point_t = std::chrono::steady_clock::time_point;
 
     enum class methods {
         put,
@@ -41,16 +45,6 @@ namespace curly_hpp
         head,
         post
     };
-
-    using http_code_t = std::uint16_t;
-    using headers_t = std::map<std::string, std::string, icase_string_compare>;
-
-    using time_sec_t = std::chrono::seconds;
-    using time_ms_t = std::chrono::milliseconds;
-    using time_point_t = std::chrono::steady_clock::time_point;
-
-    class request;
-    using callback_t = std::function<void(request)>;
 
     class upload_handler {
     public:
@@ -65,8 +59,42 @@ namespace curly_hpp
         virtual std::size_t write(const char* src, std::size_t size) = 0;
     };
 
+    using callback_t = std::function<void(request)>;
     using uploader_uptr = std::unique_ptr<upload_handler>;
     using downloader_uptr = std::unique_ptr<download_handler>;
+}
+
+namespace curly_hpp
+{
+    class exception final : public std::runtime_error {
+    public:
+        explicit exception(const char* what)
+        : std::runtime_error(what) {}
+
+        explicit exception(const std::string& what)
+        : std::runtime_error(what) {}
+    };
+}
+
+namespace curly_hpp
+{
+    namespace detail
+    {
+        struct icase_string_compare final {
+            using is_transparent = void;
+            bool operator()(std::string_view l, std::string_view r) const noexcept {
+                return std::lexicographical_compare(
+                    l.begin(), l.end(), r.begin(), r.end(),
+                    [](const char lc, const char rc) noexcept {
+                        return std::tolower(lc) < std::tolower(rc);
+                    });
+            }
+        };
+    }
+
+    using headers_t = std::map<
+        std::string, std::string,
+        detail::icase_string_compare>;
 }
 
 namespace curly_hpp
@@ -81,15 +109,31 @@ namespace curly_hpp
         content_t(const content_t&) = default;
         content_t& operator=(const content_t&) = default;
 
-        content_t(std::string_view data);
-        content_t(std::vector<char> data) noexcept;
+        content_t(std::string_view data)
+        : data_(data.cbegin(), data.cend() ) {}
 
-        std::size_t size() const noexcept;
-        std::vector<char>& data() noexcept;
-        const std::vector<char>& data() const noexcept;
+        content_t(std::vector<char> data) noexcept
+        : data_(std::move(data)) {}
 
-        std::string as_string_copy() const;
-        std::string_view as_string_view() const noexcept;
+        std::size_t size() const noexcept {
+            return data_.size();
+        }
+
+        std::vector<char>& data() noexcept {
+            return data_;
+        }
+
+        const std::vector<char>& data() const noexcept {
+            return data_;
+        }
+
+        std::string as_string_copy() const {
+            return {data_.data(), data_.size()};
+        }
+
+        std::string_view as_string_view() const noexcept {
+            return {data_.data(), data_.size()};
+        }
     private:
         std::vector<char> data_;
     };
@@ -107,10 +151,16 @@ namespace curly_hpp
         response(const response&) = delete;
         response& operator=(const response&) = delete;
 
-        explicit response(http_code_t c) noexcept;
+        explicit response(http_code_t c) noexcept
+        : http_code_(c) {}
 
-        bool is_http_error() const noexcept;
-        http_code_t http_code() const noexcept;
+        bool is_http_error() const noexcept {
+            return http_code_ >= 400u;
+        }
+
+        http_code_t http_code() const noexcept {
+            return http_code_;
+        }
     public:
         content_t content;
         headers_t headers;
