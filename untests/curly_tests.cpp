@@ -58,6 +58,22 @@ namespace
         }
     };
 
+    class canceled_progressor : public net::progress_handler {
+    public:
+        canceled_progressor() = default;
+
+        float update(
+            std::size_t dnow, std::size_t dtotal,
+            std::size_t unow, std::size_t utotal) override
+        {
+            (void)dnow;
+            (void)dtotal;
+            (void)unow;
+            (void)utotal;
+            throw std::exception();
+        }
+    };
+
     netex::promise<net::content_t> download(std::string url) {
         return netex::make_promise<net::content_t>([
             url = std::move(url)
@@ -670,6 +686,14 @@ TEST_CASE("curly") {
                 .verbose(true)
                 .method(net::http_method::GET)
                 .downloader<canceled_downloader>()
+                .send();
+            REQUIRE(req.wait() == net::req_status::canceled);
+        }
+        {
+            auto req = net::request_builder("https://httpbin.org/anything")
+                .verbose(true)
+                .method(net::http_method::GET)
+                .progressor<canceled_progressor>()
                 .send();
             REQUIRE(req.wait() == net::req_status::canceled);
         }

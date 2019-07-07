@@ -62,9 +62,18 @@ namespace curly_hpp
         virtual std::size_t write(const char* src, std::size_t size) = 0;
     };
 
+    class progress_handler {
+    public:
+        virtual ~progress_handler() {}
+        virtual float update(
+            std::size_t dnow, std::size_t dtotal,
+            std::size_t unow, std::size_t utotal) = 0;
+    };
+
     using callback_t = std::function<void(request)>;
     using uploader_uptr = std::unique_ptr<upload_handler>;
     using downloader_uptr = std::unique_ptr<download_handler>;
+    using progressor_uptr = std::unique_ptr<progress_handler>;
 }
 
 namespace curly_hpp
@@ -169,6 +178,7 @@ namespace curly_hpp
         headers_t headers;
         uploader_uptr uploader;
         downloader_uptr downloader;
+        progressor_uptr progressor;
     private:
         http_code_t http_code_{0u};
     };
@@ -193,6 +203,7 @@ namespace curly_hpp
         request(internal_state_ptr);
 
         bool cancel() noexcept;
+        float progress() const noexcept;
         req_status status() const noexcept;
 
         bool is_done() const noexcept;
@@ -246,6 +257,7 @@ namespace curly_hpp
         request_builder& callback(callback_t c) noexcept;
         request_builder& uploader(uploader_uptr u) noexcept;
         request_builder& downloader(downloader_uptr d) noexcept;
+        request_builder& progressor(progressor_uptr p) noexcept;
 
         const std::string& url() const noexcept;
         http_method method() const noexcept;
@@ -270,6 +282,9 @@ namespace curly_hpp
         downloader_uptr& downloader() noexcept;
         const downloader_uptr& downloader() const noexcept;
 
+        progressor_uptr& progressor() noexcept;
+        const progressor_uptr& progressor() const noexcept;
+
         request send();
 
         template < typename Callback >
@@ -289,6 +304,12 @@ namespace curly_hpp
             static_assert(std::is_base_of_v<download_handler, Downloader>);
             return downloader(std::make_unique<Downloader>(std::forward<Args>(args)...));
         }
+
+        template < typename Progressor, typename... Args >
+        request_builder& progressor(Args&&... args) {
+            static_assert(std::is_base_of_v<progress_handler, Progressor>);
+            return progressor(std::make_unique<Progressor>(std::forward<Args>(args)...));
+        }
     private:
         std::string url_;
         http_method method_{http_method::GET};
@@ -304,6 +325,7 @@ namespace curly_hpp
         callback_t callback_;
         uploader_uptr uploader_;
         downloader_uptr downloader_;
+        progressor_uptr progressor_;
     };
 }
 

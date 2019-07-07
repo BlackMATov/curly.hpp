@@ -77,6 +77,23 @@ namespace
     private:
         data_t& data_;
     };
+
+    class default_progressor final : public progress_handler {
+    public:
+        default_progressor() = default;
+
+        float update(
+            std::size_t dnow, std::size_t dtotal,
+            std::size_t unow, std::size_t utotal) override
+        {
+            double now_d = static_cast<double>(dnow + unow);
+            double total_d = static_cast<double>(dtotal + utotal);
+            double progress_d = total_d > 0.0
+                ? static_cast<float>(now_d / total_d)
+                : 0.f;
+            return static_cast<float>(std::min(std::max(progress_d, 0.0), 1.0));
+        }
+    };
 }
 
 // -----------------------------------------------------------------------------
@@ -253,6 +270,10 @@ namespace curly_hpp
             if ( !breq_.downloader() ) {
                 breq_.downloader<default_downloader>(&response_content_);
             }
+
+            if ( !breq_.progressor() ) {
+                breq_.progressor<default_progressor>();
+            }
         }
 
         void enqueue(CURLM* curlm) {
@@ -286,6 +307,10 @@ namespace curly_hpp
 
             curl_easy_setopt(curlh_.get(), CURLOPT_WRITEDATA, this);
             curl_easy_setopt(curlh_.get(), CURLOPT_WRITEFUNCTION, &s_download_callback_);
+
+            curl_easy_setopt(curlh_.get(), CURLOPT_NOPROGRESS, 0l);
+            curl_easy_setopt(curlh_.get(), CURLOPT_XFERINFODATA, this);
+            curl_easy_setopt(curlh_.get(), CURLOPT_XFERINFOFUNCTION, &s_progress_callback_);
 
             curl_easy_setopt(curlh_.get(), CURLOPT_HEADERDATA, this);
             curl_easy_setopt(curlh_.get(), CURLOPT_HEADERFUNCTION, &s_header_callback_);
@@ -364,6 +389,21 @@ namespace curly_hpp
         void dequeue(CURLM* curlm) noexcept {
             std::lock_guard<std::mutex> guard(mutex_);
             if ( curlh_ ) {
+                curl_easy_setopt(curlh_.get(), CURLOPT_PRIVATE, nullptr);
+
+                curl_easy_setopt(curlh_.get(), CURLOPT_READDATA, nullptr);
+                curl_easy_setopt(curlh_.get(), CURLOPT_READFUNCTION, nullptr);
+
+                curl_easy_setopt(curlh_.get(), CURLOPT_WRITEDATA, nullptr);
+                curl_easy_setopt(curlh_.get(), CURLOPT_WRITEFUNCTION, nullptr);
+
+                curl_easy_setopt(curlh_.get(), CURLOPT_NOPROGRESS, 1l);
+                curl_easy_setopt(curlh_.get(), CURLOPT_XFERINFODATA, nullptr);
+                curl_easy_setopt(curlh_.get(), CURLOPT_XFERINFOFUNCTION, nullptr);
+
+                curl_easy_setopt(curlh_.get(), CURLOPT_HEADERDATA, nullptr);
+                curl_easy_setopt(curlh_.get(), CURLOPT_HEADERFUNCTION, nullptr);
+
                 curl_multi_remove_handle(curlm, curlh_.get());
                 curlh_.reset();
             }
@@ -392,12 +432,14 @@ namespace curly_hpp
                 response_.headers = std::move(response_headers_);
                 response_.uploader = std::move(breq_.uploader());
                 response_.downloader = std::move(breq_.downloader());
+                response_.progressor = std::move(breq_.progressor());
             } catch (...) {
                 status_ = req_status::failed;
                 cvar_.notify_all();
                 return false;
             }
 
+            progress_ = 1.f;
             status_ = req_status::done;
             error_.clear();
 
@@ -446,6 +488,11 @@ namespace curly_hpp
 
             cvar_.notify_all();
             return true;
+        }
+
+        float progress() const noexcept {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return progress_;
         }
 
         req_status status() const noexcept {
@@ -553,6 +600,13 @@ namespace curly_hpp
             return self->download_callback_(ptr, size * nmemb);
         }
 
+        static int s_progress_callback_(
+            void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow) noexcept
+        {
+            auto* self = static_cast<internal_state*>(clientp);
+            return self->progress_callback(dlnow, dltotal, ulnow, ultotal);
+        }
+
         static std::size_t s_header_callback_(
             char* buffer, std::size_t size, std::size_t nitems, void* userdata) noexcept
         {
@@ -586,6 +640,26 @@ namespace curly_hpp
                 return written_bytes;
             } catch (...) {
                 return 0u;
+            }
+        }
+
+        int progress_callback(
+            curl_off_t dlnow, curl_off_t dltotal,
+            curl_off_t ulnow, curl_off_t ultotal) noexcept
+        {
+            try {
+                std::lock_guard<std::mutex> guard(mutex_);
+
+                std::size_t dnow_sz = dlnow > 0 ? static_cast<std::size_t>(dlnow) : 0u;
+                std::size_t dtotal_sz = dltotal > 0 ? static_cast<std::size_t>(dltotal) : 0u;
+
+                std::size_t unow_sz = ulnow > 0 ? static_cast<std::size_t>(ulnow) : 0u;
+                std::size_t utotal_sz = ultotal > 0 ? static_cast<std::size_t>(ultotal) : 0u;
+
+                progress_ = breq_.progressor()->update(dnow_sz, dtotal_sz, unow_sz, utotal_sz);
+                return 0;
+            } catch (...) {
+                return 1;
             }
         }
 
@@ -631,6 +705,7 @@ namespace curly_hpp
         bool callbacked_{false};
         std::exception_ptr callback_exception_{nullptr};
     private:
+        float progress_{0.f};
         req_status status_{req_status::pending};
         std::string error_{"Unknown error"};
     private:
@@ -648,6 +723,10 @@ namespace curly_hpp
 
     bool request::cancel() noexcept {
         return state_->cancel();
+    }
+
+    float request::progress() const noexcept {
+        return state_->progress();
     }
 
     req_status request::status() const noexcept {
@@ -787,6 +866,11 @@ namespace curly_hpp
         return *this;
     }
 
+    request_builder& request_builder::progressor(progressor_uptr p) noexcept {
+        progressor_ = std::move(p);
+        return *this;
+    }
+
     const std::string& request_builder::url() const noexcept {
         return url_;
     }
@@ -853,6 +937,14 @@ namespace curly_hpp
 
     const downloader_uptr& request_builder::downloader() const noexcept {
         return downloader_;
+    }
+
+    progressor_uptr& request_builder::progressor() noexcept {
+        return progressor_;
+    }
+
+    const progressor_uptr& request_builder::progressor() const noexcept {
+        return progressor_;
     }
 
     request request_builder::send() {
