@@ -30,9 +30,9 @@
 - Custom headers
 - Asynchronous requests
 - Different types of timeouts
-- Custom completion callbacks
-- PUT, GET, HEAD, POST methods
+- Completion and progress callbacks
 - Custom uploading and downloading streams
+- PUT, GET, HEAD, POST, PATCH, DELETE, OPTIONS methods
 
 ## Installation
 
@@ -244,7 +244,7 @@ netex::promise<net::content_t> download(std::string url) {
                     reject(net::exception("network error"));
                     return;
                 }
-                net::response response = request.get();
+                net::response response = request.take();
                 if ( response.is_http_error() ) {
                     reject(net::exception("server error"));
                     return;

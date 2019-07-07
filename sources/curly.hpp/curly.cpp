@@ -121,14 +121,12 @@ namespace
             cvar_.notify_all();
         }
 
-        bool try_dequeue(T& v) noexcept(
-            std::is_nothrow_move_assignable_v<T>)
-        {
+        bool try_dequeue(T& v) {
             std::lock_guard<std::mutex> guard(mutex_);
             if ( queue_.empty() ) {
                 return false;
             }
-            v = std::move(queue_.front());
+            v = queue_.front();
             queue_.pop();
             return true;
         }
@@ -154,7 +152,7 @@ namespace
         }
 
         template < typename Clock, typename Duration >
-        bool wait_until(const std::chrono::time_point<Clock, Duration>& time) const {
+        bool wait_until(const std::chrono::time_point<Clock, Duration>& time) const noexcept {
             std::unique_lock<std::mutex> lock(mutex_);
             return cvar_.wait_until(lock, time, [this](){
                 return !queue_.empty();
@@ -171,9 +169,6 @@ namespace
         std::string header_builder;
         curl_slist* result = nullptr;
         for ( const auto& [key,value] : headers ) {
-            if ( key.empty() ) {
-                continue;
-            }
             try {
                 header_builder.clear();
                 header_builder.append(key);
@@ -214,14 +209,12 @@ namespace
     class curl_state final {
     public:
         template < typename F >
-        static std::invoke_result_t<F, CURLM*> with(F&& f)
-            noexcept(std::is_nothrow_invocable_v<F, CURLM*>)
-        {
+        static std::invoke_result_t<F, CURLM*> with(F&& f) {
             std::lock_guard<std::mutex> guard(mutex_);
             if ( !self_ ) {
                 self_ = std::make_unique<curl_state>();
             }
-            return std::forward<F>(f)(self_->curlm_);
+            return std::invoke(std::forward<F>(f), self_->curlm_);
         }
     public:
         curl_state() {
