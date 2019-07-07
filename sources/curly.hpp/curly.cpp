@@ -295,18 +295,18 @@ namespace curly_hpp
             curl_easy_setopt(curlh_.get(), CURLOPT_VERBOSE, breq_.verbose() ? 1l : 0l);
 
             switch ( breq_.method() ) {
-            case methods::put:
+            case http_method::PUT:
                 curl_easy_setopt(curlh_.get(), CURLOPT_UPLOAD, 1l);
                 curl_easy_setopt(curlh_.get(), CURLOPT_INFILESIZE_LARGE,
                     static_cast<curl_off_t>(breq_.uploader()->size()));
                 break;
-            case methods::get:
+            case http_method::GET:
                 curl_easy_setopt(curlh_.get(), CURLOPT_HTTPGET, 1l);
                 break;
-            case methods::head:
+            case http_method::HEAD:
                 curl_easy_setopt(curlh_.get(), CURLOPT_NOBODY, 1l);
                 break;
-            case methods::post:
+            case http_method::POST:
                 curl_easy_setopt(curlh_.get(), CURLOPT_POST, 1l);
                 curl_easy_setopt(curlh_.get(), CURLOPT_POSTFIELDSIZE_LARGE,
                     static_cast<curl_off_t>(breq_.uploader()->size()));
@@ -355,7 +355,7 @@ namespace curly_hpp
 
         bool done() noexcept {
             std::lock_guard<std::mutex> guard(mutex_);
-            if ( status_ != statuses::pending ) {
+            if ( status_ != req_status::pending ) {
                 return false;
             }
 
@@ -365,7 +365,7 @@ namespace curly_hpp
                 CURLINFO_RESPONSE_CODE,
                 &http_code) || !http_code )
             {
-                status_ = statuses::failed;
+                status_ = req_status::failed;
                 cvar_.notify_all();
                 return false;
             }
@@ -377,12 +377,12 @@ namespace curly_hpp
                 response_.uploader = std::move(breq_.uploader());
                 response_.downloader = std::move(breq_.downloader());
             } catch (...) {
-                status_ = statuses::failed;
+                status_ = req_status::failed;
                 cvar_.notify_all();
                 return false;
             }
 
-            status_ = statuses::done;
+            status_ = req_status::done;
             error_.clear();
 
             cvar_.notify_all();
@@ -391,21 +391,21 @@ namespace curly_hpp
 
         bool fail(CURLcode err) noexcept {
             std::lock_guard<std::mutex> guard(mutex_);
-            if ( status_ != statuses::pending ) {
+            if ( status_ != req_status::pending ) {
                 return false;
             }
 
             switch ( err ) {
             case CURLE_OPERATION_TIMEDOUT:
-                status_ = statuses::timeout;
+                status_ = req_status::timeout;
                 break;
             case CURLE_READ_ERROR:
             case CURLE_WRITE_ERROR:
             case CURLE_ABORTED_BY_CALLBACK:
-                status_ = statuses::canceled;
+                status_ = req_status::canceled;
                 break;
             default:
-                status_ = statuses::failed;
+                status_ = req_status::failed;
                 break;
             }
 
@@ -421,54 +421,54 @@ namespace curly_hpp
 
         bool cancel() noexcept {
             std::lock_guard<std::mutex> guard(mutex_);
-            if ( status_ != statuses::pending ) {
+            if ( status_ != req_status::pending ) {
                 return false;
             }
 
-            status_ = statuses::canceled;
+            status_ = req_status::canceled;
             error_.clear();
 
             cvar_.notify_all();
             return true;
         }
 
-        statuses status() const noexcept {
+        req_status status() const noexcept {
             std::lock_guard<std::mutex> guard(mutex_);
             return status_;
         }
 
         bool is_done() const noexcept {
             std::lock_guard<std::mutex> guard(mutex_);
-            return status_ == statuses::done;
+            return status_ == req_status::done;
         }
 
         bool is_pending() const noexcept {
             std::lock_guard<std::mutex> guard(mutex_);
-            return status_ == statuses::pending;
+            return status_ == req_status::pending;
         }
 
-        statuses wait(bool wait_callback) const noexcept {
+        req_status wait(bool wait_callback) const noexcept {
             std::unique_lock<std::mutex> lock(mutex_);
             cvar_.wait(lock, [this, wait_callback](){
-                return (status_ != statuses::pending)
+                return (status_ != req_status::pending)
                     && (!wait_callback || callbacked_);
             });
             return status_;
         }
 
-        statuses wait_for(time_ms_t ms, bool wait_callback) const noexcept {
+        req_status wait_for(time_ms_t ms, bool wait_callback) const noexcept {
             std::unique_lock<std::mutex> lock(mutex_);
             cvar_.wait_for(lock, ms, [this, wait_callback](){
-                return (status_ != statuses::pending)
+                return (status_ != req_status::pending)
                     && (!wait_callback || callbacked_);
             });
             return status_;
         }
 
-        statuses wait_until(time_point_t tp, bool wait_callback) const noexcept {
+        req_status wait_until(time_point_t tp, bool wait_callback) const noexcept {
             std::unique_lock<std::mutex> lock(mutex_);
             cvar_.wait_until(lock, tp, [this, wait_callback](){
-                return (status_ != statuses::pending)
+                return (status_ != req_status::pending)
                     && (!wait_callback || callbacked_);
             });
             return status_;
@@ -477,19 +477,19 @@ namespace curly_hpp
         response take() {
             std::unique_lock<std::mutex> lock(mutex_);
             cvar_.wait(lock, [this](){
-                return status_ != statuses::pending;
+                return status_ != req_status::pending;
             });
-            if ( status_ != statuses::done ) {
+            if ( status_ != req_status::done ) {
                 throw exception("curly_hpp: response is unavailable");
             }
-            status_ = statuses::empty;
+            status_ = req_status::empty;
             return std::move(response_);
         }
 
         const std::string& get_error() const noexcept {
             std::unique_lock<std::mutex> lock(mutex_);
             cvar_.wait(lock, [this](){
-                return status_ != statuses::pending;
+                return status_ != req_status::pending;
             });
             return error_;
         }
@@ -513,7 +513,7 @@ namespace curly_hpp
                 callback_exception_ = std::current_exception();
             }
             std::lock_guard<std::mutex> guard(mutex_);
-            assert(!callbacked_ && status_ != statuses::pending);
+            assert(!callbacked_ && status_ != req_status::pending);
             callbacked_ = true;
             cvar_.notify_all();
         }
@@ -615,7 +615,7 @@ namespace curly_hpp
         bool callbacked_{false};
         std::exception_ptr callback_exception_{nullptr};
     private:
-        statuses status_{statuses::pending};
+        req_status status_{req_status::pending};
         std::string error_{"Unknown error"};
     private:
         mutable std::mutex mutex_;
@@ -634,7 +634,7 @@ namespace curly_hpp
         return state_->cancel();
     }
 
-    request::statuses request::status() const noexcept {
+    req_status request::status() const noexcept {
         return state_->status();
     }
 
@@ -646,27 +646,27 @@ namespace curly_hpp
         return state_->is_pending();
     }
 
-    request::statuses request::wait() const noexcept {
+    req_status request::wait() const noexcept {
         return state_->wait(false);
     }
 
-    request::statuses request::wait_for(time_ms_t ms) const noexcept {
+    req_status request::wait_for(time_ms_t ms) const noexcept {
         return state_->wait_for(ms, false);
     }
 
-    request::statuses request::wait_until(time_point_t tp) const noexcept {
+    req_status request::wait_until(time_point_t tp) const noexcept {
         return state_->wait_until(tp, false);
     }
 
-    request::statuses request::wait_callback() const noexcept {
+    req_status request::wait_callback() const noexcept {
         return state_->wait(true);
     }
 
-    request::statuses request::wait_callback_for(time_ms_t ms) const noexcept {
+    req_status request::wait_callback_for(time_ms_t ms) const noexcept {
         return state_->wait_for(ms, true);
     }
 
-    request::statuses request::wait_callback_until(time_point_t tp) const noexcept {
+    req_status request::wait_callback_until(time_point_t tp) const noexcept {
         return state_->wait_until(tp, true);
     }
 
@@ -691,13 +691,13 @@ namespace curly_hpp
 
 namespace curly_hpp
 {
-    request_builder::request_builder(methods m) noexcept
+    request_builder::request_builder(http_method m) noexcept
     : method_(m) {}
 
     request_builder::request_builder(std::string u) noexcept
     : url_(std::move(u)) {}
 
-    request_builder::request_builder(methods m, std::string u) noexcept
+    request_builder::request_builder(http_method m, std::string u) noexcept
     : url_(std::move(u))
     , method_(m) {}
 
@@ -706,7 +706,7 @@ namespace curly_hpp
         return *this;
     }
 
-    request_builder& request_builder::method(methods m) noexcept {
+    request_builder& request_builder::method(http_method m) noexcept {
         method_ = m;
         return *this;
     }
@@ -775,7 +775,7 @@ namespace curly_hpp
         return url_;
     }
 
-    methods request_builder::method() const noexcept {
+    http_method request_builder::method() const noexcept {
         return method_;
     }
 

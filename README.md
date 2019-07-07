@@ -67,7 +67,7 @@ net::perform();
 ```cpp
 // makes a GET request and async send it
 auto request = net::request_builder()
-    .method(net::methods::get)
+    .method(net::http_method::GET)
     .url("http://www.httpbin.org/get")
     .send();
 
@@ -97,7 +97,7 @@ std::cout << "Body content: " << response.content.as_string_view() << std::endl;
 
 ```cpp
 auto request = net::request_builder()
-    .method(net::methods::post)
+    .method(net::http_method::POST)
     .url("http://www.httpbin.org/post")
     .header("Content-Type", "application/json")
     .content(R"({"hello" : "world"})")
@@ -217,7 +217,7 @@ private:
 };
 
 net::request_builder()
-    .method(net::methods::post)
+    .method(net::http_method::POST)
     .url("https://httpbin.org/anything")
     .uploader<file_uploader>("image.jpeg")
     .send().wait();

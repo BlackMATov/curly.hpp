@@ -39,11 +39,11 @@ namespace curly_hpp
     using time_ms_t = std::chrono::milliseconds;
     using time_point_t = std::chrono::steady_clock::time_point;
 
-    enum class methods {
-        put,
-        get,
-        head,
-        post
+    enum class http_method {
+        PUT,
+        GET,
+        HEAD,
+        POST
     };
 
     class upload_handler {
@@ -173,16 +173,16 @@ namespace curly_hpp
 
 namespace curly_hpp
 {
+    enum class req_status {
+        done,
+        empty,
+        failed,
+        timeout,
+        pending,
+        canceled
+    };
+
     class request final {
-    public:
-        enum class statuses {
-            done,
-            empty,
-            failed,
-            timeout,
-            pending,
-            canceled
-        };
     public:
         class internal_state;
         using internal_state_ptr = std::shared_ptr<internal_state>;
@@ -190,18 +190,18 @@ namespace curly_hpp
         request(internal_state_ptr);
 
         bool cancel() noexcept;
-        statuses status() const noexcept;
+        req_status status() const noexcept;
 
         bool is_done() const noexcept;
         bool is_pending() const noexcept;
 
-        statuses wait() const noexcept;
-        statuses wait_for(time_ms_t ms) const noexcept;
-        statuses wait_until(time_point_t tp) const noexcept;
+        req_status wait() const noexcept;
+        req_status wait_for(time_ms_t ms) const noexcept;
+        req_status wait_until(time_point_t tp) const noexcept;
 
-        statuses wait_callback() const noexcept;
-        statuses wait_callback_for(time_ms_t ms) const noexcept;
-        statuses wait_callback_until(time_point_t tp) const noexcept;
+        req_status wait_callback() const noexcept;
+        req_status wait_callback_for(time_ms_t ms) const noexcept;
+        req_status wait_callback_until(time_point_t tp) const noexcept;
 
         response take();
         const std::string& get_error() const noexcept;
@@ -223,12 +223,12 @@ namespace curly_hpp
         request_builder(const request_builder&) = delete;
         request_builder& operator=(const request_builder&) = delete;
 
-        explicit request_builder(methods m) noexcept;
+        explicit request_builder(http_method m) noexcept;
         explicit request_builder(std::string u) noexcept;
-        explicit request_builder(methods m, std::string u) noexcept;
+        explicit request_builder(http_method m, std::string u) noexcept;
 
         request_builder& url(std::string u) noexcept;
-        request_builder& method(methods m) noexcept;
+        request_builder& method(http_method m) noexcept;
         request_builder& header(std::string key, std::string value);
 
         request_builder& verbose(bool v) noexcept;
@@ -245,7 +245,7 @@ namespace curly_hpp
         request_builder& downloader(downloader_uptr d) noexcept;
 
         const std::string& url() const noexcept;
-        methods method() const noexcept;
+        http_method method() const noexcept;
         const headers_t& headers() const noexcept;
 
         bool verbose() const noexcept;
@@ -288,7 +288,7 @@ namespace curly_hpp
         }
     private:
         std::string url_;
-        methods method_{methods::get};
+        http_method method_{http_method::GET};
         headers_t headers_;
         bool verbose_{false};
         bool verification_{false};
