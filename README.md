@@ -71,8 +71,8 @@ auto request = net::request_builder()
     .url("http://www.httpbin.org/get")
     .send();
 
-// synchronous waits and get a response
-auto response = request.get();
+// synchronous waits and take a response
+auto response = request.take();
 
 // prints results
 std::cout << "Status code: " << response.http_code() << std::endl;
@@ -103,7 +103,7 @@ auto request = net::request_builder()
     .content(R"({"hello" : "world"})")
     .send();
 
-auto response = request.get();
+auto response = request.take();
 std::cout << "Body content: " << response.content.as_string_view() << std::endl;
 std::cout << "Content Length: " << response.headers["content-length"] << std::endl;
 
@@ -138,11 +138,11 @@ auto request = net::request_builder()
 request.wait();
 
 if ( request.is_done() ) {
-    auto response = request.get();
+    auto response = request.take();
     std::cout << "Status code: " << response.http_code() << std::endl;
 } else {
     // throws net::exception because a response is unavailable
-    // auto response = request.get();
+    // auto response = request.take();
 
     std::cout << "Error message: " << request.get_error() << std::endl;
 }
@@ -156,7 +156,7 @@ if ( request.is_done() ) {
 auto request = net::request_builder("http://www.httpbin.org/get")
     .callback([](net::request request){
         if ( request.is_done() ) {
-            auto response = request.get();
+            auto response = request.take();
             std::cout << "Status code: " << response.http_code() << std::endl;
         } else {
             std::cout << "Error message: " << request.get_error() << std::endl;

@@ -203,7 +203,7 @@ namespace curly_hpp
         statuses wait_callback_for(time_ms_t ms) const noexcept;
         statuses wait_callback_until(time_point_t tp) const noexcept;
 
-        response get();
+        response take();
         const std::string& get_error() const noexcept;
         std::exception_ptr get_callback_exception() const noexcept;
     private:

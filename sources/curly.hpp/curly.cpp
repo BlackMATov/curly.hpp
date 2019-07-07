@@ -8,6 +8,7 @@
 
 #include <mutex>
 #include <queue>
+#include <type_traits>
 #include <condition_variable>
 
 #ifndef NOMINMAX
@@ -91,18 +92,26 @@ namespace
     template < typename T >
     class mt_queue final {
     public:
-        void enqueue(T v) {
+        void enqueue(T&& v) {
             std::lock_guard<std::mutex> guard(mutex_);
             queue_.push(std::move(v));
             cvar_.notify_all();
         }
 
-        bool try_dequeue(T& v) {
+        void enqueue(const T& v) {
+            std::lock_guard<std::mutex> guard(mutex_);
+            queue_.push(v);
+            cvar_.notify_all();
+        }
+
+        bool try_dequeue(T& v) noexcept(
+            std::is_nothrow_move_assignable_v<T>)
+        {
             std::lock_guard<std::mutex> guard(mutex_);
             if ( queue_.empty() ) {
                 return false;
             }
-            v = queue_.front();
+            v = std::move(queue_.front());
             queue_.pop();
             return true;
         }
@@ -112,9 +121,25 @@ namespace
             return queue_.empty();
         }
 
-        bool wait_content_for(time_ms_t ms) const noexcept {
+        void wait() const noexcept {
             std::unique_lock<std::mutex> lock(mutex_);
-            return cvar_.wait_for(lock, ms, [this](){
+            cvar_.wait(lock, [this](){
+                return !queue_.empty();
+            });
+        }
+
+        template < typename Rep, typename Period >
+        bool wait_for(const std::chrono::duration<Rep, Period> duration) const noexcept {
+            std::unique_lock<std::mutex> lock(mutex_);
+            return cvar_.wait_for(lock, duration, [this](){
+                return !queue_.empty();
+            });
+        }
+
+        template < typename Clock, typename Duration >
+        bool wait_until(const std::chrono::time_point<Clock, Duration>& time) const {
+            std::unique_lock<std::mutex> lock(mutex_);
+            return cvar_.wait_until(lock, time, [this](){
                 return !queue_.empty();
             });
         }
@@ -449,7 +474,7 @@ namespace curly_hpp
             return status_;
         }
 
-        response get() {
+        response take() {
             std::unique_lock<std::mutex> lock(mutex_);
             cvar_.wait(lock, [this](){
                 return status_ != statuses::pending;
@@ -645,8 +670,8 @@ namespace curly_hpp
         return state_->wait_until(tp, true);
     }
 
-    response request::get() {
-        return state_->get();
+    response request::take() {
+        return state_->take();
     }
 
     const std::string& request::get_error() const noexcept {
@@ -927,7 +952,7 @@ namespace curly_hpp
     void wait_activity(time_ms_t ms) {
         curl_state::with([ms](CURLM* curlm){
             if ( active_handles.empty() ) {
-                new_handles.wait_content_for(ms);
+                new_handles.wait_for(ms);
             } else if ( new_handles.empty() ) {
                 const int timeout_ms = static_cast<int>(ms.count());
                 if ( CURLM_OK != curl_multi_wait(curlm, nullptr, 0, timeout_ms, nullptr) ) {
