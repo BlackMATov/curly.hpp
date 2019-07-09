@@ -202,6 +202,12 @@ namespace curly_hpp
     public:
         request(internal_state_ptr);
 
+        request(request&&) = default;
+        request& operator=(request&&) = default;
+
+        request(const request&) = default;
+        request& operator=(const request&) = default;
+
         bool cancel() noexcept;
         float progress() const noexcept;
         req_status status() const noexcept;
