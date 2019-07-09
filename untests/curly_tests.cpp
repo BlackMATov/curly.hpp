@@ -451,6 +451,51 @@ TEST_CASE("curly") {
     SECTION("binary") {
         {
             auto resp = net::request_builder()
+                .url("https://httpbin.org/bytes/5")
+                .method(net::http_method::GET)
+                .send().take();
+            REQUIRE(resp.http_code() == 200u);
+            REQUIRE(resp.content.size() == 5u);
+            REQUIRE(resp.headers.count("Content-Type"));
+            REQUIRE(resp.headers.count("Content-Length"));
+            REQUIRE(resp.headers.at("Content-Type") == "application/octet-stream");
+            REQUIRE(resp.headers.at("Content-Length") == "5");
+        }
+        {
+            auto resp = net::request_builder()
+                .url("http://httpbin.org/drip?duration=2&numbytes=5&code=200&delay=1")
+                .method(net::http_method::GET)
+                .send().take();
+            REQUIRE(resp.http_code() == 200u);
+            REQUIRE(resp.content.size() == 5u);
+            REQUIRE(resp.headers.count("Content-Type"));
+            REQUIRE(resp.headers.count("Content-Length"));
+            REQUIRE(resp.headers.at("Content-Type") == "application/octet-stream");
+            REQUIRE(resp.headers.at("Content-Length") == "5");
+        }
+        {
+            auto req = net::request_builder()
+                .url("http://httpbin.org/drip?duration=15&numbytes=5&code=200&delay=1")
+                .method(net::http_method::GET)
+                .response_timeout(net::time_sec_t(3))
+                .send();
+            REQUIRE(req.wait_for(net::time_sec_t(1)) == net::req_status::pending);
+            REQUIRE(req.wait_for(net::time_sec_t(5)) == net::req_status::timeout);
+        }
+        {
+            auto resp = net::request_builder()
+                .url("http://httpbin.org/base64/SFRUUEJJTiBpcyBhd2Vzb21l")
+                .method(net::http_method::GET)
+                .send().take();
+            REQUIRE(resp.http_code() == 200u);
+            REQUIRE(resp.content.as_string_view() == "HTTPBIN is awesome");
+            REQUIRE(resp.headers.count("Content-Type"));
+            REQUIRE(resp.headers.count("Content-Length"));
+            REQUIRE(resp.headers.at("Content-Type") == "text/html; charset=utf-8");
+            REQUIRE(resp.headers.at("Content-Length") == "18");
+        }
+        {
+            auto resp = net::request_builder()
                 .url("https://httpbin.org/image/png")
                 .method(net::http_method::HEAD)
                 .send().take();
