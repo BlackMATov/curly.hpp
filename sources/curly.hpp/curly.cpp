@@ -453,7 +453,7 @@ namespace curly_hpp
             case CURLE_READ_ERROR:
             case CURLE_WRITE_ERROR:
             case CURLE_ABORTED_BY_CALLBACK:
-                status_ = req_status::canceled;
+                status_ = req_status::cancelled;
                 break;
             default:
                 status_ = req_status::failed;
@@ -476,7 +476,7 @@ namespace curly_hpp
                 return false;
             }
 
-            status_ = req_status::canceled;
+            status_ = req_status::cancelled;
             error_.clear();
 
             cvar_.notify_all();

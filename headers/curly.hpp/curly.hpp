@@ -192,7 +192,7 @@ namespace curly_hpp
         failed,
         timeout,
         pending,
-        canceled
+        cancelled
     };
 
     class request final {
