@@ -32,9 +32,9 @@ namespace
         return d;
     }
 
-    class canceled_uploader : public net::upload_handler {
+    class cancelled_uploader : public net::upload_handler {
     public:
-        canceled_uploader() = default;
+        cancelled_uploader() = default;
 
         std::size_t size() const override {
             return 10;
@@ -47,9 +47,9 @@ namespace
         }
     };
 
-    class canceled_downloader : public net::download_handler {
+    class cancelled_downloader : public net::download_handler {
     public:
-        canceled_downloader() = default;
+        cancelled_downloader() = default;
 
         std::size_t write(const char* src, std::size_t size) override {
             (void)src;
@@ -58,9 +58,9 @@ namespace
         }
     };
 
-    class canceled_progressor : public net::progress_handler {
+    class cancelled_progressor : public net::progress_handler {
     public:
-        canceled_progressor() = default;
+        cancelled_progressor() = default;
 
         float update(
             std::size_t dnow, std::size_t dtotal,
@@ -136,7 +136,7 @@ TEST_CASE("curly") {
         {
             auto req = net::request_builder("https://httpbin.org/delay/1").send();
             REQUIRE(req.cancel());
-            REQUIRE(req.status() == net::req_status::canceled);
+            REQUIRE(req.status() == net::req_status::cancelled);
             REQUIRE(req.get_error().empty());
         }
         {
@@ -184,7 +184,7 @@ TEST_CASE("curly") {
             auto req = net::request_builder("https://httpbin.org/delay/2").send();
             REQUIRE(req.cancel());
             REQUIRE_THROWS_AS(req.take(), net::exception);
-            REQUIRE(req.status() == net::req_status::canceled);
+            REQUIRE(req.status() == net::req_status::cancelled);
         }
         {
             auto req = net::request_builder("https://httpbin.org/delay/2")
@@ -451,6 +451,51 @@ TEST_CASE("curly") {
     SECTION("binary") {
         {
             auto resp = net::request_builder()
+                .url("https://httpbin.org/bytes/5")
+                .method(net::http_method::GET)
+                .send().take();
+            REQUIRE(resp.http_code() == 200u);
+            REQUIRE(resp.content.size() == 5u);
+            REQUIRE(resp.headers.count("Content-Type"));
+            REQUIRE(resp.headers.count("Content-Length"));
+            REQUIRE(resp.headers.at("Content-Type") == "application/octet-stream");
+            REQUIRE(resp.headers.at("Content-Length") == "5");
+        }
+        {
+            auto resp = net::request_builder()
+                .url("http://httpbin.org/drip?duration=2&numbytes=5&code=200&delay=1")
+                .method(net::http_method::GET)
+                .send().take();
+            REQUIRE(resp.http_code() == 200u);
+            REQUIRE(resp.content.size() == 5u);
+            REQUIRE(resp.headers.count("Content-Type"));
+            REQUIRE(resp.headers.count("Content-Length"));
+            REQUIRE(resp.headers.at("Content-Type") == "application/octet-stream");
+            REQUIRE(resp.headers.at("Content-Length") == "5");
+        }
+        {
+            auto req = net::request_builder()
+                .url("http://httpbin.org/drip?duration=15&numbytes=5&code=200&delay=1")
+                .method(net::http_method::GET)
+                .response_timeout(net::time_sec_t(3))
+                .send();
+            REQUIRE(req.wait_for(net::time_sec_t(1)) == net::req_status::pending);
+            REQUIRE(req.wait_for(net::time_sec_t(5)) == net::req_status::timeout);
+        }
+        {
+            auto resp = net::request_builder()
+                .url("http://httpbin.org/base64/SFRUUEJJTiBpcyBhd2Vzb21l")
+                .method(net::http_method::GET)
+                .send().take();
+            REQUIRE(resp.http_code() == 200u);
+            REQUIRE(resp.content.as_string_view() == "HTTPBIN is awesome");
+            REQUIRE(resp.headers.count("Content-Type"));
+            REQUIRE(resp.headers.count("Content-Length"));
+            REQUIRE(resp.headers.at("Content-Type") == "text/html; charset=utf-8");
+            REQUIRE(resp.headers.at("Content-Length") == "18");
+        }
+        {
+            auto resp = net::request_builder()
                 .url("https://httpbin.org/image/png")
                 .method(net::http_method::HEAD)
                 .send().take();
@@ -672,30 +717,30 @@ TEST_CASE("curly") {
         }
     }
 
-    SECTION("canceled_handlers") {
+    SECTION("cancelled_handlers") {
         {
             auto req = net::request_builder("https://httpbin.org/anything")
                 .verbose(true)
                 .method(net::http_method::POST)
-                .uploader<canceled_uploader>()
+                .uploader<cancelled_uploader>()
                 .send();
-            REQUIRE(req.wait() == net::req_status::canceled);
+            REQUIRE(req.wait() == net::req_status::cancelled);
         }
         {
             auto req = net::request_builder("https://httpbin.org/anything")
                 .verbose(true)
                 .method(net::http_method::GET)
-                .downloader<canceled_downloader>()
+                .downloader<cancelled_downloader>()
                 .send();
-            REQUIRE(req.wait() == net::req_status::canceled);
+            REQUIRE(req.wait() == net::req_status::cancelled);
         }
         {
             auto req = net::request_builder("https://httpbin.org/anything")
                 .verbose(true)
                 .method(net::http_method::GET)
-                .progressor<canceled_progressor>()
+                .progressor<cancelled_progressor>()
                 .send();
-            REQUIRE(req.wait() == net::req_status::canceled);
+            REQUIRE(req.wait() == net::req_status::cancelled);
         }
     }
 
@@ -750,11 +795,11 @@ TEST_CASE("curly") {
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                     ++call_once;
                     REQUIRE_FALSE(request.is_done());
-                    REQUIRE(request.status() == net::req_status::canceled);
+                    REQUIRE(request.status() == net::req_status::cancelled);
                     REQUIRE(request.get_error().empty());
                 }).send();
             REQUIRE(req.cancel());
-            REQUIRE(req.wait_callback() == net::req_status::canceled);
+            REQUIRE(req.wait_callback() == net::req_status::cancelled);
             REQUIRE_FALSE(req.get_callback_exception());
             REQUIRE(call_once.load() == 1u);
         }

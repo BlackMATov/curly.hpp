@@ -192,7 +192,7 @@ namespace curly_hpp
         failed,
         timeout,
         pending,
-        canceled
+        cancelled
     };
 
     class request final {
@@ -201,6 +201,12 @@ namespace curly_hpp
         using internal_state_ptr = std::shared_ptr<internal_state>;
     public:
         request(internal_state_ptr);
+
+        request(request&&) = default;
+        request& operator=(request&&) = default;
+
+        request(const request&) = default;
+        request& operator=(const request&) = default;
 
         bool cancel() noexcept;
         float progress() const noexcept;
