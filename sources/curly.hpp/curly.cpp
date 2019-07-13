@@ -86,12 +86,12 @@ namespace
             std::size_t dnow, std::size_t dtotal,
             std::size_t unow, std::size_t utotal) override
         {
-            double now_d = static_cast<double>(dnow + unow);
-            double total_d = static_cast<double>(dtotal + utotal);
-            double progress_d = total_d > 0.0
+            const double now_d = static_cast<double>(dnow + unow);
+            const double total_d = static_cast<double>(dtotal + utotal);
+            const float progress_d = total_d > 0.0
                 ? static_cast<float>(now_d / total_d)
                 : 0.f;
-            return static_cast<float>(std::min(std::max(progress_d, 0.0), 1.0));
+            return std::min(std::max(progress_d, 0.f), 1.f);
         }
     };
 }
@@ -685,8 +685,8 @@ namespace curly_hpp
         request_builder breq_;
         curlh_t curlh_{nullptr, &curl_easy_cleanup};
         slist_t hlist_{nullptr, &curl_slist_free_all};
-        time_point_t last_response_;
-        time_point_t::duration response_timeout_;
+        time_point_t last_response_{time_point_t::clock::now()};
+        time_point_t::duration response_timeout_{0};
     private:
         response response_;
         headers_t response_headers_;

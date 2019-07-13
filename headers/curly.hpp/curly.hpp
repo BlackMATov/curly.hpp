@@ -51,20 +51,20 @@ namespace curly_hpp
 
     class upload_handler {
     public:
-        virtual ~upload_handler() {}
+        virtual ~upload_handler() = default;
         virtual std::size_t size() const = 0;
         virtual std::size_t read(char* dst, std::size_t size) = 0;
     };
 
     class download_handler {
     public:
-        virtual ~download_handler() {}
+        virtual ~download_handler() = default;
         virtual std::size_t write(const char* src, std::size_t size) = 0;
     };
 
     class progress_handler {
     public:
-        virtual ~progress_handler() {}
+        virtual ~progress_handler() = default;
         virtual float update(
             std::size_t dnow, std::size_t dtotal,
             std::size_t unow, std::size_t utotal) = 0;
