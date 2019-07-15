@@ -33,11 +33,11 @@ namespace
 
     using curlh_t = std::unique_ptr<
         CURL,
-        void(*)(CURL*)>;
+        decltype(&curl_easy_cleanup)>;
 
     using slist_t = std::unique_ptr<
         curl_slist,
-        void(*)(curl_slist*)>;
+        decltype(&curl_slist_free_all)>;
 
     class default_uploader final : public upload_handler {
     public:
@@ -190,6 +190,36 @@ namespace
         }
         return {result, &curl_slist_free_all};
     }
+
+    std::string make_escaped_string(std::string_view s) {
+        std::unique_ptr<char, decltype(&curl_free)> escaped_string{
+            curl_easy_escape(nullptr, s.data(), static_cast<int>(s.size())),
+            &curl_free};
+        if ( !escaped_string ) {
+            throw std::bad_alloc();
+        }
+        return std::string(escaped_string.get());
+    }
+
+    std::string make_escaped_url(std::string_view u, const qparams_t& ps) {
+        std::string result{u};
+        bool has_qparams = result.find('?') != std::string_view::npos;
+        for ( auto iter = ps.begin(); iter != ps.end(); ++iter ) {
+            const std::string k = !iter->first.empty() ? iter->first : iter->second;
+            const std::string v = !iter->first.empty() ? iter->second : std::string();
+            if ( k.empty() ) {
+                continue;
+            }
+            result.append(has_qparams ? "&" : "?");
+            result.append(make_escaped_string(k));
+            if ( !v.empty() ) {
+                result.append("=");
+                result.append(make_escaped_string(v));
+            }
+            has_qparams = true;
+        }
+        return result;
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -282,6 +312,7 @@ namespace curly_hpp
             }
 
             hlist_ = make_header_slist(breq_.headers());
+            url_with_qparams_ = make_escaped_url(breq_.url(), breq_.qparams());
 
             if ( const auto* vi = curl_version_info(CURLVERSION_NOW); vi && vi->version ) {
                 std::string user_agent("cURL/");
@@ -308,7 +339,7 @@ namespace curly_hpp
             curl_easy_setopt(curlh_.get(), CURLOPT_HEADERDATA, this);
             curl_easy_setopt(curlh_.get(), CURLOPT_HEADERFUNCTION, &s_header_callback_);
 
-            curl_easy_setopt(curlh_.get(), CURLOPT_URL, breq_.url().c_str());
+            curl_easy_setopt(curlh_.get(), CURLOPT_URL, url_with_qparams_.c_str());
             curl_easy_setopt(curlh_.get(), CURLOPT_HTTPHEADER, hlist_.get());
             curl_easy_setopt(curlh_.get(), CURLOPT_VERBOSE, breq_.verbose() ? 1l : 0l);
 
@@ -685,6 +716,7 @@ namespace curly_hpp
         request_builder breq_;
         curlh_t curlh_{nullptr, &curl_easy_cleanup};
         slist_t hlist_{nullptr, &curl_slist_free_all};
+        std::string url_with_qparams_;
         time_point_t last_response_{time_point_t::clock::now()};
         time_point_t::duration response_timeout_{0};
     private:
@@ -799,8 +831,27 @@ namespace curly_hpp
         return *this;
     }
 
-    request_builder& request_builder::header(std::string key, std::string value) {
-        headers_.insert_or_assign(std::move(key), std::move(value));
+    request_builder& request_builder::qparams(qparam_ilist_t ps) {
+        for ( const auto& [k,v] : ps ) {
+            qparams_.emplace(k, v);
+        }
+        return *this;
+    }
+
+    request_builder& request_builder::qparam(std::string k, std::string v) {
+        qparams_.emplace(std::move(k), std::move(v));
+        return *this;
+    }
+
+    request_builder& request_builder::headers(header_ilist_t hs) {
+        for ( const auto& [k,v] : hs ) {
+            headers_.insert_or_assign(std::string(k), v);
+        }
+        return *this;
+    }
+
+    request_builder& request_builder::header(std::string k, std::string v) {
+        headers_.insert_or_assign(std::move(k), std::move(v));
         return *this;
     }
 
@@ -870,6 +921,10 @@ namespace curly_hpp
 
     http_method request_builder::method() const noexcept {
         return method_;
+    }
+
+    const qparams_t& request_builder::qparams() const noexcept {
+        return qparams_;
     }
 
     const headers_t& request_builder::headers() const noexcept {

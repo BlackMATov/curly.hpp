@@ -371,17 +371,58 @@ TEST_CASE("curly") {
     }
 
     SECTION("request_inspection") {
-        auto req = net::request_builder()
-            .url("https://httpbin.org/headers")
-            .header("Custom-Header-1", "custom_header_value_1")
-            .header("Custom-Header-2", "custom header value 2")
-            .header("Custom-Header-3", std::string())
-            .send();
-        const auto resp = req.take();
-        const auto content_j = json_parse(resp.content.as_string_view());
-        REQUIRE(content_j["headers"]["Custom-Header-1"] == "custom_header_value_1");
-        REQUIRE(content_j["headers"]["Custom-Header-2"] == "custom header value 2");
-        REQUIRE(content_j["headers"]["Custom-Header-3"] == "");
+        {
+            auto resp = net::request_builder()
+                .url("https://httpbin.org/headers")
+                .header("Custom-Header-1", "custom_header_value_1")
+                .header("Custom-Header-2", "custom header value 2")
+                .header("Custom-Header-3", std::string())
+                .send().take();
+            const auto content_j = json_parse(resp.content.as_string_view());
+            REQUIRE(content_j["headers"]["Custom-Header-1"] == "custom_header_value_1");
+            REQUIRE(content_j["headers"]["Custom-Header-2"] == "custom header value 2");
+            REQUIRE(content_j["headers"]["Custom-Header-3"] == "");
+        }
+        {
+            auto resp = net::request_builder()
+                .url("https://httpbin.org/headers")
+                .headers({
+                    {"Custom-Header-1", "custom_header_value_1"},
+                    {"Custom-Header-2", "custom header value 2"},
+                    {"Custom-Header-3", ""}})
+                .send().take();
+            const auto content_j = json_parse(resp.content.as_string_view());
+            REQUIRE(content_j["headers"]["Custom-Header-1"] == "custom_header_value_1");
+            REQUIRE(content_j["headers"]["Custom-Header-2"] == "custom header value 2");
+            REQUIRE(content_j["headers"]["Custom-Header-3"] == "");
+        }
+        {
+            auto resp = net::request_builder()
+                .url("https://httpbin.org/headers")
+                .headers({
+                    {"Custom-Header-1", "custom_header_value_1"},
+                    {"Custom-Header-2", "custom header value 2"},
+                    {"Custom-Header-3", ""}})
+                .send().take();
+            const auto content_j = json_parse(resp.content.as_string_view());
+            REQUIRE(content_j["headers"]["Custom-Header-1"] == "custom_header_value_1");
+            REQUIRE(content_j["headers"]["Custom-Header-2"] == "custom header value 2");
+            REQUIRE(content_j["headers"]["Custom-Header-3"] == "");
+        }
+        {
+            std::map<std::string, std::string> headers{
+                {"Custom-Header-1", "custom_header_value_1"},
+                {"Custom-Header-2", "custom header value 2"},
+                {"Custom-Header-3", ""}};
+            auto resp = net::request_builder()
+                .url("https://httpbin.org/headers")
+                .headers(headers.begin(), headers.end())
+                .send().take();
+            const auto content_j = json_parse(resp.content.as_string_view());
+            REQUIRE(content_j["headers"]["Custom-Header-1"] == "custom_header_value_1");
+            REQUIRE(content_j["headers"]["Custom-Header-2"] == "custom header value 2");
+            REQUIRE(content_j["headers"]["Custom-Header-3"] == "");
+        }
     }
 
     SECTION("response_inspection") {
@@ -397,11 +438,53 @@ TEST_CASE("curly") {
         }
         {
             auto req = net::request_builder()
-                .url("https://httpbin.org/response-headers?hello=world&world=hello")
+                .url("https://httpbin.org/response-headers?hello=world")
                 .method(net::http_method::POST)
+                .qparam("world", "hello")
                 .send();
             const auto resp = req.take();
             const auto content_j = json_parse(resp.content.as_string_copy());
+            REQUIRE(content_j["hello"] == "world");
+            REQUIRE(content_j["world"] == "hello");
+        }
+        {
+            auto req = net::request_builder()
+                .url("https://httpbin.org/response-headers")
+                .method(net::http_method::GET)
+                .qparam("hello", "world")
+                .qparam("world", "hello")
+                .send();
+            const auto resp = req.take();
+            const auto content_j = json_parse(resp.content.as_string_view());
+            REQUIRE(content_j["hello"] == "world");
+            REQUIRE(content_j["world"] == "hello");
+        }
+        {
+            auto req = net::request_builder()
+                .url("https://httpbin.org/response-headers")
+                .method(net::http_method::GET)
+                .qparams({
+                    {"", "hello"},
+                    {"world", ""}
+                })
+                .send();
+            const auto resp = req.take();
+            const auto content_j = json_parse(resp.content.as_string_view());
+            REQUIRE(content_j["hello"] == "");
+            REQUIRE(content_j["world"] == "");
+        }
+        {
+            std::map<std::string,std::string> qparams{
+                {"hello", "world"},
+                {"world", "hello"}
+            };
+            auto req = net::request_builder()
+                .url("https://httpbin.org/response-headers")
+                .method(net::http_method::GET)
+                .qparams(qparams.begin(), qparams.end())
+                .send();
+            const auto resp = req.take();
+            const auto content_j = json_parse(resp.content.as_string_view());
             REQUIRE(content_j["hello"] == "world");
             REQUIRE(content_j["world"] == "hello");
         }
