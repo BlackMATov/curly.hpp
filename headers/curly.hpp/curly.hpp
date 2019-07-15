@@ -26,6 +26,7 @@
 #include <map>
 #include <vector>
 #include <string>
+#include <initializer_list>
 
 namespace curly_hpp
 {
@@ -51,20 +52,20 @@ namespace curly_hpp
 
     class upload_handler {
     public:
-        virtual ~upload_handler() {}
+        virtual ~upload_handler() = default;
         virtual std::size_t size() const = 0;
         virtual std::size_t read(char* dst, std::size_t size) = 0;
     };
 
     class download_handler {
     public:
-        virtual ~download_handler() {}
+        virtual ~download_handler() = default;
         virtual std::size_t write(const char* src, std::size_t size) = 0;
     };
 
     class progress_handler {
     public:
-        virtual ~progress_handler() {}
+        virtual ~progress_handler() = default;
         virtual float update(
             std::size_t dnow, std::size_t dtotal,
             std::size_t unow, std::size_t utotal) = 0;
@@ -92,6 +93,17 @@ namespace curly_hpp
 {
     namespace detail
     {
+        struct case_string_compare final {
+            using is_transparent = void;
+            bool operator()(std::string_view l, std::string_view r) const noexcept {
+                return std::lexicographical_compare(
+                    l.begin(), l.end(), r.begin(), r.end(),
+                    [](const char lc, const char rc) noexcept {
+                        return lc < rc;
+                    });
+            }
+        };
+
         struct icase_string_compare final {
             using is_transparent = void;
             bool operator()(std::string_view l, std::string_view r) const noexcept {
@@ -104,9 +116,19 @@ namespace curly_hpp
         };
     }
 
+    using qparams_t = std::multimap<
+        std::string, std::string,
+        detail::case_string_compare>;
+
     using headers_t = std::map<
         std::string, std::string,
         detail::icase_string_compare>;
+
+    using qparam_ilist_t = std::initializer_list<
+        std::pair<std::string_view, std::string_view>>;
+
+    using header_ilist_t = std::initializer_list<
+        std::pair<std::string_view, std::string_view>>;
 }
 
 namespace curly_hpp
@@ -249,7 +271,12 @@ namespace curly_hpp
 
         request_builder& url(std::string u) noexcept;
         request_builder& method(http_method m) noexcept;
-        request_builder& header(std::string key, std::string value);
+
+        request_builder& qparams(qparam_ilist_t ps);
+        request_builder& qparam(std::string k, std::string v);
+
+        request_builder& headers(header_ilist_t hs);
+        request_builder& header(std::string k, std::string v);
 
         request_builder& verbose(bool v) noexcept;
         request_builder& verification(bool v) noexcept;
@@ -267,6 +294,7 @@ namespace curly_hpp
 
         const std::string& url() const noexcept;
         http_method method() const noexcept;
+        const qparams_t& qparams() const noexcept;
         const headers_t& headers() const noexcept;
 
         bool verbose() const noexcept;
@@ -292,6 +320,24 @@ namespace curly_hpp
         const progressor_uptr& progressor() const noexcept;
 
         request send();
+
+        template < typename Iter >
+        request_builder& qparams(Iter first, Iter last) {
+            while ( first != last ) {
+                qparam(first->first, first->second);
+                ++first;
+            }
+            return *this;
+        }
+
+        template < typename Iter >
+        request_builder& headers(Iter first, Iter last) {
+            while ( first != last ) {
+                header(first->first, first->second);
+                ++first;
+            }
+            return *this;
+        }
 
         template < typename Callback >
         request_builder& callback(Callback&& f) {
@@ -327,6 +373,7 @@ namespace curly_hpp
     private:
         std::string url_;
         http_method method_{http_method::GET};
+        qparams_t qparams_;
         headers_t headers_;
         bool verbose_{false};
         bool verification_{false};
