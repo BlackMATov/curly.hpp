@@ -30,6 +30,7 @@
 - Custom headers
 - Asynchronous requests
 - Different types of timeouts
+- URL encoded query parameters
 - Completion and progress callbacks
 - Custom uploading and downloading streams
 - PUT, GET, HEAD, POST, PATCH, DELETE, OPTIONS methods
@@ -126,6 +127,20 @@ std::cout << "Content Length: " << response.headers["content-length"] << std::en
 //     "url": "https://www.httpbin.org/post"
 // }
 // Content Length: 389
+```
+
+### Query Parameters
+
+```cpp
+auto request = net::request_builder()
+    .url("http://httpbin.org/anything")
+    .qparam("hello", "world")
+    .send();
+
+auto response = request.take();
+std::cout << "Last URL: " << response.last_url() << std::endl;
+
+// Last URL: http://httpbin.org/anything?hello=world
 ```
 
 ### Error Handling

@@ -439,6 +439,17 @@ namespace curly_hpp
                 return false;
             }
 
+            char* last_url = nullptr;
+            if ( CURLE_OK != curl_easy_getinfo(
+                curlh_.get(),
+                CURLINFO_EFFECTIVE_URL,
+                &last_url) || !last_url )
+            {
+                status_ = req_status::failed;
+                cvar_.notify_all();
+                return false;
+            }
+
             long http_code = 0;
             if ( CURLE_OK != curl_easy_getinfo(
                 curlh_.get(),
@@ -451,7 +462,7 @@ namespace curly_hpp
             }
 
             try {
-                response_ = response(static_cast<http_code_t>(http_code));
+                response_ = response(last_url, static_cast<http_code_t>(http_code));
                 response_.content = std::move(response_content_);
                 response_.headers = std::move(response_headers_);
                 response_.uploader = std::move(breq_.uploader());
