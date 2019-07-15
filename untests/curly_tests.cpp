@@ -179,6 +179,7 @@ TEST_CASE("curly") {
             auto resp = req.take();
             REQUIRE(req.status() == net::req_status::empty);
             REQUIRE(resp.http_code() == 204u);
+            REQUIRE(resp.last_url() == "https://httpbin.org/status/204");
         }
         {
             auto req = net::request_builder("https://httpbin.org/delay/2").send();
@@ -484,6 +485,7 @@ TEST_CASE("curly") {
                 .qparams(qparams.begin(), qparams.end())
                 .send();
             const auto resp = req.take();
+            REQUIRE(resp.last_url() == "https://httpbin.org/response-headers?hello=world&world=hello");
             const auto content_j = json_parse(resp.content.as_string_view());
             REQUIRE(content_j["hello"] == "world");
             REQUIRE(content_j["world"] == "hello");
@@ -969,6 +971,18 @@ TEST_CASE("curly_examples") {
         //     "url": "https://www.httpbin.org/post"
         // }
         // Content Length: 389
+    }
+
+    SECTION("Query Parameters") {
+        auto request = net::request_builder()
+            .url("http://httpbin.org/anything")
+            .qparam("hello", "world")
+            .send();
+
+        auto response = request.take();
+        std::cout << "Last URL: " << response.last_url() << std::endl;
+
+        // Last URL: http://httpbin.org/anything?hello=world
     }
 
     SECTION("Error Handling") {

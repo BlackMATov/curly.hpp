@@ -185,11 +185,16 @@ namespace curly_hpp
         response(const response&) = delete;
         response& operator=(const response&) = delete;
 
-        explicit response(http_code_t c) noexcept
-        : http_code_(c) {}
+        explicit response(std::string u, http_code_t c) noexcept
+        : last_url_(u)
+        , http_code_(c) {}
 
         bool is_http_error() const noexcept {
             return http_code_ >= 400u;
+        }
+
+        const std::string& last_url() const noexcept {
+            return last_url_;
         }
 
         http_code_t http_code() const noexcept {
@@ -202,6 +207,7 @@ namespace curly_hpp
         downloader_uptr downloader;
         progressor_uptr progressor;
     private:
+        std::string last_url_;
         http_code_t http_code_{0u};
     };
 }
