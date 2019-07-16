@@ -162,7 +162,7 @@ if ( request.is_done() ) {
     std::cout << "Error message: " << request.get_error() << std::endl;
 }
 
-// Error message: Couldn't resolve host name
+// Error message: Could not resolve host: unavailable.site.com
 ```
 
 ### Request Callbacks
