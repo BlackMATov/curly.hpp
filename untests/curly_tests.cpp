@@ -137,7 +137,7 @@ TEST_CASE("curly") {
             auto req = net::request_builder("https://httpbin.org/delay/1").send();
             REQUIRE(req.cancel());
             REQUIRE(req.status() == net::req_status::cancelled);
-            REQUIRE(req.get_error().empty());
+            REQUIRE_FALSE(req.get_error().empty());
         }
         {
             auto req = net::request_builder("https://httpbin.org/status/200").send();
@@ -881,7 +881,7 @@ TEST_CASE("curly") {
                     ++call_once;
                     REQUIRE_FALSE(request.is_done());
                     REQUIRE(request.status() == net::req_status::cancelled);
-                    REQUIRE(request.get_error().empty());
+                    REQUIRE_FALSE(request.get_error().empty());
                 }).send();
             REQUIRE(req.cancel());
             REQUIRE(req.wait_callback() == net::req_status::cancelled);
@@ -1002,7 +1002,7 @@ TEST_CASE("curly_examples") {
             std::cout << "Error message: " << request.get_error() << std::endl;
         }
 
-        // Error message: Couldn't resolve host name
+        // Error message: Could not resolve host: unavailable.site.com
     }
 
     SECTION("Request Callbacks") {
