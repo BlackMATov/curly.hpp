@@ -325,6 +325,7 @@ namespace curly_hpp
             curl_easy_setopt(curlh_.get(), CURLOPT_TCP_KEEPALIVE, 1l);
             curl_easy_setopt(curlh_.get(), CURLOPT_BUFFERSIZE, 65536l);
             curl_easy_setopt(curlh_.get(), CURLOPT_USE_SSL, CURLUSESSL_ALL);
+            curl_easy_setopt(curlh_.get(), CURLOPT_ERRORBUFFER, error_buffer_);
 
             curl_easy_setopt(curlh_.get(), CURLOPT_READDATA, this);
             curl_easy_setopt(curlh_.get(), CURLOPT_READFUNCTION, &s_upload_callback_);
@@ -503,24 +504,29 @@ namespace curly_hpp
                 return false;
             }
 
-            switch ( err ) {
-            case CURLE_OPERATION_TIMEDOUT:
-                status_ = req_status::timeout;
-                break;
-            case CURLE_READ_ERROR:
-            case CURLE_WRITE_ERROR:
-            case CURLE_ABORTED_BY_CALLBACK:
-                status_ = req_status::cancelled;
-                break;
-            default:
-                status_ = req_status::failed;
-                break;
-            }
-
             try {
-                error_ = curl_easy_strerror(err);
+                switch ( err ) {
+                case CURLE_OPERATION_TIMEDOUT:
+                    status_ = req_status::timeout;
+                    error_.assign("Operation timeout");
+                    break;
+                case CURLE_READ_ERROR:
+                case CURLE_WRITE_ERROR:
+                case CURLE_ABORTED_BY_CALLBACK:
+                    status_ = req_status::cancelled;
+                    error_.assign("Callback aborted");
+                    break;
+                default:
+                    status_ = req_status::failed;
+                    error_.assign(error_buffer_[0]
+                        ? error_buffer_
+                        : "Unknown error");
+                    break;
+                }
             } catch (...) {
-                // nothing
+                status_ = req_status::failed;
+                cvar_.notify_all();
+                return true;
             }
 
             cvar_.notify_all();
@@ -533,8 +539,14 @@ namespace curly_hpp
                 return false;
             }
 
-            status_ = req_status::cancelled;
-            error_.clear();
+            try {
+                status_ = req_status::cancelled;
+                error_.assign("Operation cancelled");
+            } catch (...) {
+                status_ = req_status::failed;
+                cvar_.notify_all();
+                return true;
+            }
 
             cvar_.notify_all();
             return true;
@@ -759,6 +771,7 @@ namespace curly_hpp
         float progress_{0.f};
         req_status status_{req_status::pending};
         std::string error_{"Unknown error"};
+        char error_buffer_[CURL_ERROR_SIZE]{'\0'};
     private:
         mutable std::mutex mutex_;
         mutable std::condition_variable cvar_;
