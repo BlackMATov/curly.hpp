@@ -1089,13 +1089,13 @@ TEST_CASE("curly_examples") {
 }
 
 TEST_CASE("proxy") {
-    net::auto_performer performer;
+    net::performer performer;
 
     {
         try {
             auto ipinfo_req = net::request_builder()
-                    .method(net::methods::get)
-                    .url("https://ipinfo.io")
+                    .method(net::http_method::GET)
+                    .url("https://api.ipify.org?format=json")
                     .send();
 
             // synchronous waits and get a response
@@ -1103,7 +1103,7 @@ TEST_CASE("proxy") {
             json::Document ipinfo;
             ipinfo.Parse(default_ip);
             try {
-                auto ipinfo_resp = ipinfo_req.get();
+                auto ipinfo_resp = ipinfo_req.take();
                 ipinfo = json_parse(ipinfo_resp.content.as_string_view());
                 REQUIRE(ipinfo_resp.http_code() == 200u);
             }
@@ -1117,10 +1117,10 @@ TEST_CASE("proxy") {
             {
                 auto req = net::request_builder()
                         .url("https://httpbin.org/get?show_env")
-                        .method(net::methods::get)
+                        .method(net::http_method::GET)
                         .send();
                 try {
-                    const auto resp = req.get();
+                    const auto resp = req.take();
                     const auto resp_content = json_parse(resp.content.as_string_view());
                     REQUIRE(resp.http_code() == 200u);
                     REQUIRE(resp_content["headers"]["X-Real-Ip"] == ipinfo["ip"]);
@@ -1135,16 +1135,16 @@ TEST_CASE("proxy") {
             {
                 auto proxy_req = net::request_builder()
                         .url("https://gimmeproxy.com/api/getProxy")
-                        .method(net::methods::get)
+                        .method(net::http_method::GET)
                         .send();
-                const auto proxy_content = json_parse(proxy_req.get().content.as_string_view());
+                const auto proxy_content = json_parse(proxy_req.take().content.as_string_view());
 
                 auto req = net::request_builder()
                         .url("https://httpbin.org/get?show_env")
-                        .method(net::methods::get)
+                        .method(net::http_method::GET)
                         .proxy(proxy_content["curl"].GetString())
                         .send();
-                const auto resp = req.get();
+                const auto resp = req.take();
                 const auto resp_content = json_parse(resp.content.as_string_view());
                 REQUIRE(resp.http_code() == 200u);
                 REQUIRE(resp_content["headers"]["X-Real-Ip"] != ipinfo["ip"]);

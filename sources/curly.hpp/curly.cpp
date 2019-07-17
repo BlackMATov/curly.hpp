@@ -385,10 +385,8 @@ namespace curly_hpp
                 curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYPEER, 1l);
                 curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYHOST, 2l);
             } else {
-#ifndef __APPLE__
                 curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYPEER, 0l);
                 curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYHOST, 0l);
-#endif
             }
 
             if ( breq_.redirections() ) {
@@ -402,17 +400,25 @@ namespace curly_hpp
             curl_easy_setopt(curlh_.get(), CURLOPT_TIMEOUT_MS,
                 static_cast<long>(std::max(time_ms_t(1), breq_.request_timeout()).count()));
 
-            if ( !breq_.proxy().empty() ) {
-                curl_easy_setopt(curlh_.get(), CURLOPT_PROXY, breq_.proxy().c_str());
+            if ( breq_.proxy() ) {
+                curl_easy_setopt(curlh_.get(), CURLOPT_PROXY, breq_.proxy()->c_str());
+                if ( breq_.proxy_username() ) {
+                    curl_easy_setopt(curlh_.get(), CURLOPT_PROXYUSERNAME, breq_.proxy_username()->c_str());
+                }
+                if ( breq_.proxy_password() ) {
+                    curl_easy_setopt(curlh_.get(), CURLOPT_PROXYPASSWORD, breq_.proxy_password()->c_str());
+                }
             }
-            if ( !breq_.proxy_username().empty() ) {
-                curl_easy_setopt(curlh_.get(), CURLOPT_PROXYUSERNAME, breq_.proxy_username().c_str());
+            if ( breq_.verification_capath() ) {
+                curl_easy_setopt(curlh_.get(), CURLOPT_CAINFO, breq_.verification_capath()->c_str());
             }
-            if ( !breq_.proxy_password().empty() ) {
-                curl_easy_setopt(curlh_.get(), CURLOPT_PROXYPASSWORD, breq_.proxy_password().c_str());
-            }
-            if ( !breq_.verification_capath().empty() ) {
-                curl_easy_setopt(curlh_.get(), CURLOPT_CAINFO, breq_.verification_capath().c_str());
+
+            if ( breq_.client_certificate() ) {
+                curl_easy_setopt(curlh_.get(), CURLOPT_SSLCERT, breq_.client_certificate()->c_str());
+                curl_easy_setopt(curlh_.get(), CURLOPT_SSLCERTTYPE, breq_.certificate_type());
+                if ( breq_.certificate_password() ) {
+                    curl_easy_setopt(curlh_.get(), CURLOPT_SSLCERTPASSWD, breq_.certificate_password()->c_str());
+                }
             }
 
             curl_easy_setopt(curlh_.get(), CURLOPT_CONNECTTIMEOUT_MS,
@@ -865,18 +871,11 @@ namespace curly_hpp
         return *this;
     }
 
-    request_builder& request_builder::proxy(std::string p) noexcept {
+    request_builder& request_builder::proxy(std::string p, std::optional<std::string> u,
+                                            std::optional<std::string> pw) noexcept {
         proxy_ = std::move(p);
-        return *this;
-    }
-
-    request_builder& request_builder::proxy_username(std::string u) noexcept {
         proxy_user_ = std::move(u);
-        return *this;
-    }
-
-    request_builder& request_builder::proxy_password(std::string p) noexcept {
-        proxy_passw_ = std::move(p);
+        proxy_passw_ = std::move(pw);
         return *this;
     }
 
@@ -974,20 +973,41 @@ namespace curly_hpp
         return *this;
     }
 
+    request_builder& request_builder::client_certificate(std::string cert,
+                                                         curly_hpp::ssl_cert_enum type,
+                                                         std::optional<std::string> pw) noexcept {
+        client_certificate_  = std::move(cert);
+        client_cert_type_ = type;
+        client_cert_passw_ = std::move(pw);
+        return *this;
+    }
+
     const std::string& request_builder::url() const noexcept {
         return url_;
     }
 
-    const std::string& request_builder::proxy() const noexcept {
+    const std::optional<std::string>& request_builder::proxy() const noexcept {
         return proxy_;
     }
 
-    const std::string& request_builder::proxy_username() const noexcept {
+    const std::optional<std::string>& request_builder::proxy_username() const noexcept {
         return proxy_user_;
     }
 
-    const std::string& request_builder::proxy_password() const noexcept {
+    const std::optional<std::string>& request_builder::proxy_password() const noexcept {
         return proxy_passw_;
+    }
+
+    const std::optional<std::string>& request_builder::client_certificate() const noexcept {
+        return client_certificate_;
+    }
+
+    const std::optional<std::string>& request_builder::certificate_password() const noexcept {
+        return client_cert_passw_;
+    }
+
+    const char* request_builder::certificate_type() const noexcept {
+        return client_cert_type_.type();
     }
 
     http_method request_builder::method() const noexcept {
@@ -1010,7 +1030,7 @@ namespace curly_hpp
         return verification_;
     }
 
-    const std::string& request_builder::verification_capath() const noexcept {
+    const std::optional<std::string>& request_builder::verification_capath() const noexcept {
         return capath_;
     }
 

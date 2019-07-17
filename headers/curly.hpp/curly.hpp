@@ -259,6 +259,23 @@ namespace curly_hpp
     };
 }
 
+namespace curly_hpp {
+    class ssl_cert_enum {
+    public:
+        constexpr explicit ssl_cert_enum(const char *name) : name(name) {}
+        const char *type() const { return name; }
+    private:
+        ssl_cert_enum() : name("") {}
+        const char *name;
+    };
+
+    namespace ssl_cert {
+        constexpr ssl_cert_enum PEM("PEM");
+        constexpr ssl_cert_enum DER("DER");
+        constexpr ssl_cert_enum P12("P12");
+    }
+}
+
 namespace curly_hpp
 {
     class request_builder final {
@@ -276,10 +293,6 @@ namespace curly_hpp
         explicit request_builder(http_method m, std::string u) noexcept;
 
         request_builder& url(std::string u) noexcept;
-        request_builder& header(std::string key, std::string value);
-        request_builder& proxy(std::string p) noexcept;
-        request_builder& proxy_username(std::string u) noexcept;
-        request_builder& proxy_password(std::string p) noexcept;
         request_builder& method(http_method m) noexcept;
 
         request_builder& qparams(qparam_ilist_t ps);
@@ -303,17 +316,29 @@ namespace curly_hpp
         request_builder& downloader(downloader_uptr d) noexcept;
         request_builder& progressor(progressor_uptr p) noexcept;
 
+        request_builder& proxy(std::string p,
+                               std::optional<std::string> u = std::nullopt,
+                               std::optional<std::string> pw = std::nullopt) noexcept;
+        request_builder& client_certificate(std::string cert,
+                                            ssl_cert_enum type = ssl_cert::PEM,
+                                            std::optional<std::string> pw = std::nullopt ) noexcept;
+
         const std::string& url() const noexcept;
-        const std::string& proxy() const noexcept;
-        const std::string& proxy_username() const noexcept;
-        const std::string& proxy_password() const noexcept;
         http_method method() const noexcept;
         const qparams_t& qparams() const noexcept;
         const headers_t& headers() const noexcept;
 
+        const std::optional<std::string>& proxy() const noexcept;
+        const std::optional<std::string>& proxy_username() const noexcept;
+        const std::optional<std::string>& proxy_password() const noexcept;
+
+        const std::optional<std::string>& client_certificate() const noexcept;
+        const std::optional<std::string>& certificate_password() const noexcept;
+        const char* certificate_type() const noexcept;
+
         bool verbose() const noexcept;
         bool verification() const noexcept;
-        const std::string& verification_capath() const noexcept;
+        const std::optional<std::string>& verification_capath() const noexcept;
         std::uint32_t redirections() const noexcept;
         time_ms_t request_timeout() const noexcept;
         time_ms_t response_timeout() const noexcept;
@@ -387,10 +412,13 @@ namespace curly_hpp
         }
     private:
         std::string url_;
-        std::string proxy_;
-        std::string proxy_user_;
-        std::string proxy_passw_;
-        std::string capath_;
+        std::optional<std::string> proxy_;
+        std::optional<std::string> proxy_user_;
+        std::optional<std::string> proxy_passw_;
+        std::optional<std::string> capath_;
+        std::optional<std::string> client_certificate_;
+        std::optional<std::string> client_cert_passw_;
+        ssl_cert_enum client_cert_type_{ssl_cert::PEM};
         http_method method_{http_method::GET};
         qparams_t qparams_;
         headers_t headers_;
