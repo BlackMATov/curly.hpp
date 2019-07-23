@@ -303,8 +303,8 @@ namespace curly_hpp
         request_builder& header(std::string k, std::string v);
 
         request_builder& verbose(bool v) noexcept;
-        request_builder& verification(bool v) noexcept;
-        request_builder& verification_capath(std::string p) noexcept;
+        request_builder& verification(bool v, std::optional<std::string> capath = std::nullopt,
+                                    std::optional<std::string> cabundle = std::nullopt) noexcept;
         request_builder& redirections(std::uint32_t r) noexcept;
         request_builder& request_timeout(time_ms_t t) noexcept;
         request_builder& response_timeout(time_ms_t t) noexcept;
@@ -339,7 +339,8 @@ namespace curly_hpp
 
         bool verbose() const noexcept;
         bool verification() const noexcept;
-        const std::optional<std::string>& verification_capath() const noexcept;
+        const std::optional<std::string>& capath() const noexcept;
+        const std::optional<std::string>& cabundle() const noexcept;
         std::uint32_t redirections() const noexcept;
         time_ms_t request_timeout() const noexcept;
         time_ms_t response_timeout() const noexcept;
@@ -417,6 +418,7 @@ namespace curly_hpp
         std::optional<std::string> proxy_user_;
         std::optional<std::string> proxy_passw_;
         std::optional<std::string> capath_;
+        std::optional<std::string> cabundle_;
         std::optional<std::string> client_certificate_;
         std::optional<std::string> client_cert_passw_;
         ssl_cert_enum client_cert_type_{ssl_cert::PEM};

@@ -93,6 +93,19 @@ namespace
                 }).send();
         });
     }
+
+    class file_dowloader : public net::download_handler {
+    public:
+        file_dowloader(const char* filename)
+                : stream_(filename, std::ofstream::binary) {}
+
+        std::size_t write(const char* src, std::size_t size) override {
+            stream_.write(src, size);
+            return size;
+        }
+    private:
+        std::ofstream stream_;
+    };
 }
 
 TEST_CASE("curly") {
@@ -1022,19 +1035,6 @@ TEST_CASE("curly_examples") {
 
     SECTION("Streamed Requests") {
         {
-            class file_dowloader : public net::download_handler {
-            public:
-                file_dowloader(const char* filename)
-                : stream_(filename, std::ofstream::binary) {}
-
-                std::size_t write(const char* src, std::size_t size) override {
-                    stream_.write(src, size);
-                    return size;
-                }
-            private:
-                std::ofstream stream_;
-            };
-
             net::request_builder()
                 .url("https://httpbin.org/image/jpeg")
                 .downloader<file_dowloader>("image.jpeg")
@@ -1155,5 +1155,27 @@ TEST_CASE("proxy") {
             std::cout << "exception: " << e.what();
             FAIL("Caught exception!");
         }
+    }
+}
+
+SCENARIO("Public key authentication")
+{
+    net::performer performer;
+    WHEN("Downloading P12 client cert")
+    {
+        net::request_builder()
+            .url("https://badssl.com/certs/badssl.com-client.p12")
+            .downloader<file_dowloader>("badssl.com-client.p12")
+            .send()
+            .take();
+
+        auto req = net::request_builder()
+                .url("https://client.badssl.com")
+                .method(net::http_method::GET)
+                .client_certificate("./badssl.com-client.p12", net::ssl_cert::P12, "badssl.com")
+                .verification(true)
+                .send();
+        auto resp = req.take();
+        REQUIRE(resp.http_code() == 200u);
     }
 }

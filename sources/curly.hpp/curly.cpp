@@ -409,8 +409,11 @@ namespace curly_hpp
                     curl_easy_setopt(curlh_.get(), CURLOPT_PROXYPASSWORD, breq_.proxy_password()->c_str());
                 }
             }
-            if ( breq_.verification_capath() ) {
-                curl_easy_setopt(curlh_.get(), CURLOPT_CAINFO, breq_.verification_capath()->c_str());
+            if ( breq_.capath() ) {
+                curl_easy_setopt(curlh_.get(), CURLOPT_CAPATH, breq_.capath()->empty() ? nullptr : breq_.capath()->c_str());
+            }
+            if ( breq_.cabundle() ) {
+                curl_easy_setopt(curlh_.get(), CURLOPT_CAINFO, breq_.cabundle()->empty() ? nullptr : breq_.cabundle()->c_str());
             }
 
             if ( breq_.client_certificate() ) {
@@ -879,11 +882,6 @@ namespace curly_hpp
         return *this;
     }
 
-    request_builder& request_builder::verification_capath(std::string p) noexcept {
-        capath_ = std::move(p);
-        return *this;
-    }
-
     request_builder& request_builder::method(http_method m) noexcept {
         method_ = m;
         return *this;
@@ -918,8 +916,11 @@ namespace curly_hpp
         return *this;
     }
 
-    request_builder& request_builder::verification(bool v) noexcept {
+    request_builder& request_builder::verification(bool v, std::optional<std::string> capath,
+                                                   std::optional<std::string> cabundle) noexcept {
         verification_ = v;
+        capath_ = std::move(capath);
+        cabundle_ = std::move(cabundle);
         return *this;
     }
 
@@ -1030,8 +1031,12 @@ namespace curly_hpp
         return verification_;
     }
 
-    const std::optional<std::string>& request_builder::verification_capath() const noexcept {
+    const std::optional<std::string>& request_builder::capath() const noexcept {
         return capath_;
+    }
+
+    const std::optional<std::string>& request_builder::cabundle() const noexcept {
+        return cabundle_;
     }
 
     std::uint32_t request_builder::redirections() const noexcept {
