@@ -1123,7 +1123,9 @@ TEST_CASE("proxy") {
                     const auto resp = req.take();
                     const auto resp_content = json_parse(resp.content.as_string_view());
                     REQUIRE(resp.http_code() == 200u);
-                    REQUIRE(resp_content["headers"]["X-Real-Ip"] == ipinfo["ip"]);
+                    std::string left{resp_content["headers"]["X-Real-Ip"].GetString()};
+                    std::string right{ipinfo["ip"].GetString()};
+                    REQUIRE(left == right);
                 }
                 catch (net::exception& e)
                 {
@@ -1147,13 +1149,15 @@ TEST_CASE("proxy") {
                 const auto resp = req.take();
                 const auto resp_content = json_parse(resp.content.as_string_view());
                 REQUIRE(resp.http_code() == 200u);
-                REQUIRE(resp_content["headers"]["X-Real-Ip"] != ipinfo["ip"]);
+                std::string left{resp_content["headers"]["X-Real-Ip"].GetString()};
+                std::string right{ipinfo["ip"].GetString()};
+                REQUIRE(left != right);
             }
         }
         catch (net::exception& e)
         {
             std::cout << "exception: " << e.what();
-            FAIL("Caught exception!");
+            FAIL(e.what());
         }
     }
 }
@@ -1163,19 +1167,63 @@ SCENARIO("Public key authentication")
     net::performer performer;
     WHEN("Downloading P12 client cert")
     {
-        net::request_builder()
-            .url("https://badssl.com/certs/badssl.com-client.p12")
-            .downloader<file_dowloader>("badssl.com-client.p12")
-            .send()
-            .take();
+        try
+        {
+            net::request_builder()
+                    .url("https://badssl.com/certs/badssl.com-client.p12")
+                    .downloader<file_dowloader>("badssl.com-client.p12")
+                    .send()
+                    .take();
 
-        auto req = net::request_builder()
-                .url("https://client.badssl.com")
-                .method(net::http_method::GET)
-                .client_certificate("./badssl.com-client.p12", net::ssl_cert::P12, "badssl.com")
-                .verification(true)
-                .send();
-        auto resp = req.take();
-        REQUIRE(resp.http_code() == 200u);
+            auto req = net::request_builder()
+                    .url("https://client.badssl.com")
+                    .method(net::http_method::GET)
+                    .client_certificate("./badssl.com-client.p12", net::ssl_cert::P12, "badssl.com")
+                    .verification(true)
+                    .send();
+            auto resp = req.take();
+            REQUIRE(resp.http_code() == 200u);
+        }
+        catch(std::exception& ex)
+        {
+            FAIL(ex.what());
+        }
+    }
+}
+
+SCENARIO("Allowing requests to be created in a context that goes of of scope")
+{
+    class Scope
+    {
+        public:
+            explicit Scope(std::string url)
+            : url(std::move(url)), request()
+            {
+            }
+
+            void send()
+            {
+                request = curly_hpp::request_builder().url(url).send();
+            }
+
+            curly_hpp::http_code_t get_result()
+            {
+                auto response = request.take();
+                return response.http_code();
+            }
+        private:
+            curly_hpp::performer performer{};
+            std::string url;
+            curly_hpp::request request;
+    };
+
+    GIVEN("A helper class for curly that has the request as a member")
+    {
+        Scope scope("https://httpbin.org/delay/1");
+        THEN("We initiate the request from a method")
+        {
+            scope.send();
+            REQUIRE(scope.get_result() == 200u);
+        }
     }
 }
