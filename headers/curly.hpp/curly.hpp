@@ -28,6 +28,7 @@
 #include <vector>
 #include <string>
 #include <initializer_list>
+#include "response_code.h"
 
 namespace curly_hpp
 {
@@ -198,8 +199,8 @@ namespace curly_hpp
             return last_url_;
         }
 
-        http_code_t http_code() const noexcept {
-            return http_code_;
+        [[nodiscard]] response_code http_code() const noexcept {
+            return static_cast<response_code>(http_code_);
         }
     public:
         content_t content;
