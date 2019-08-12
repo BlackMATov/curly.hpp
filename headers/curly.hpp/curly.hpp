@@ -229,6 +229,8 @@ namespace curly_hpp
         class internal_state;
         using internal_state_ptr = std::shared_ptr<internal_state>;
     public:
+        request() = default;
+
         request(internal_state_ptr);
 
         request(request&&) = default;
@@ -256,7 +258,7 @@ namespace curly_hpp
         const std::string& get_error() const noexcept;
         std::exception_ptr get_callback_exception() const noexcept;
     private:
-        internal_state_ptr state_;
+        internal_state_ptr state_{};
     };
 }
 
