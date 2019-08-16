@@ -8,6 +8,7 @@
 
 #include <mutex>
 #include <queue>
+#include <sstream>
 #include <type_traits>
 #include <condition_variable>
 
@@ -952,6 +953,27 @@ namespace curly_hpp
     request_builder& request_builder::content(content_t c) noexcept {
         content_ = std::move(c);
         return *this;
+    }
+
+    request_builder& request_builder::content(const qparams_t& ps)
+    {
+        std::stringstream ss;
+
+        for(const auto& pair : ps)
+        {
+            const auto& key = pair.first;
+            const auto value = pair.second;
+            if(!key.empty())
+            {
+                if(ss.tellp() > 0)
+                {
+                    ss << "&";
+                }
+                ss << make_escaped_string(key) << "=" << make_escaped_string(value);
+            }
+        }
+
+        return content(ss.str());
     }
 
     request_builder& request_builder::callback(callback_t c) noexcept {

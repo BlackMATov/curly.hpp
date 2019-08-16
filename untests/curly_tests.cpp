@@ -762,6 +762,19 @@ TEST_CASE("curly") {
         }
     }
 
+    SECTION("escaped request body")
+    {
+        auto resp = net::request_builder()
+                .url("https://httpbin.org/anything")
+                .method(net::http_method::POST)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .content(curly_hpp::qparams_t{{{"data", "%&="}}} )
+                .send().take();
+
+        const auto content_j = json_parse(resp.content.as_string_view());
+        REQUIRE(content_j["form"]["data"] == "%&=");
+    }
+
     SECTION("ssl_verification") {
         {
             auto req0 = net::request_builder("https://expired.badssl.com")
@@ -1183,7 +1196,7 @@ SCENARIO("Public key authentication")
                     .client_certificate("./badssl.com-client.p12", net::ssl_cert::P12, "badssl.com")
                     // Depending on where curl is built, the location of certificates are different.
                     // Ubuntu uses /etc/ssl/certs. On macOS no path is required since DarwinSSL uses the cert store.
-                    .verification(true, "/etc/ssl/certs")
+                    .verification(true, "/etc/ssl/certs", "")
                     .send();
             auto resp = req.take();
             REQUIRE(resp.http_code() == net::response_code::OK);
