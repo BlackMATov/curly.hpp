@@ -315,6 +315,7 @@ namespace curly_hpp
 
         request_builder& content(std::string_view b);
         request_builder& content(content_t b) noexcept;
+        request_builder& content(const qparams_t& ps);
         request_builder& callback(callback_t c) noexcept;
         request_builder& uploader(uploader_uptr u) noexcept;
         request_builder& downloader(downloader_uptr d) noexcept;
