@@ -389,7 +389,10 @@ namespace curly_hpp
                 curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYPEER, 0l);
                 curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYHOST, 0l);
             }
-
+            if (breq_.resume_offset())
+            {
+                curl_easy_setopt(curlh_.get(), CURLOPT_RESUME_FROM, breq_.resume_offset());
+            }
             if ( breq_.redirections() ) {
                 curl_easy_setopt(curlh_.get(), CURLOPT_FOLLOWLOCATION, 1l);
                 curl_easy_setopt(curlh_.get(), CURLOPT_MAXREDIRS,
@@ -874,7 +877,10 @@ namespace curly_hpp
         url_ = std::move(u);
         return *this;
     }
-
+    request_builder& request_builder::resume_offset(std::size_t offset) noexcept {
+        resume_offset_ = offset;
+        return *this;
+    }
     request_builder& request_builder::proxy(std::string p, std::optional<std::string> u,
                                             std::optional<std::string> pw) noexcept {
         proxy_ = std::move(p);
@@ -1007,6 +1013,9 @@ namespace curly_hpp
 
     const std::string& request_builder::url() const noexcept {
         return url_;
+    }
+    const std::size_t& request_builder::resume_offset() const noexcept {
+        return resume_offset_;
     }
 
     const std::optional<std::string>& request_builder::proxy() const noexcept {

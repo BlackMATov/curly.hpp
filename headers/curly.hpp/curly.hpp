@@ -319,6 +319,8 @@ namespace curly_hpp
         request_builder& callback(callback_t c) noexcept;
         request_builder& uploader(uploader_uptr u) noexcept;
         request_builder& downloader(downloader_uptr d) noexcept;
+        request_builder& resume_offset(std::size_t offset) noexcept;
+
         request_builder& progressor(progressor_uptr p) noexcept;
 
         request_builder& proxy(std::string p,
@@ -330,6 +332,9 @@ namespace curly_hpp
 
         const std::string& url() const noexcept;
         http_method method() const noexcept;
+
+        const std::size_t& resume_offset() const noexcept;
+
         const qparams_t& qparams() const noexcept;
         const headers_t& headers() const noexcept;
 
@@ -418,6 +423,8 @@ namespace curly_hpp
         }
     private:
         std::string url_;
+        std::size_t resume_offset_{};
+
         std::optional<std::string> proxy_;
         std::optional<std::string> proxy_user_;
         std::optional<std::string> proxy_passw_;
