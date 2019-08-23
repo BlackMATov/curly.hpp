@@ -1,5 +1,5 @@
 [requires]
-libcurl/7.65.0@snowsoftware/agent
+libcurl/7.64.1@bincrafters/stable
 [generators]
 cmake
 cmake_paths
