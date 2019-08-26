@@ -1141,19 +1141,18 @@ TEST_CASE("proxy") {
 
             SECTION("Without proxy")
             {
+                auto url = std::string("https://proxycheck.io/v2/") + ipinfo["ip"].GetString();
                 auto req = net::request_builder()
-                        .url("https://httpbin.org/get?show_env")
+                        .url(url)
                         .method(net::http_method::GET)
+                        .verification(true)
                         .send();
                 try {
                     const auto resp = req.take();
                     const auto resp_content = json_parse(resp.content.as_string_view());
 
                     REQUIRE(resp.http_code() == net::response_code::OK);
-
-                    std::string left{resp_content["headers"]["X-Real-Ip"].GetString()};
-                    std::string right{ipinfo["ip"].GetString()};
-                    REQUIRE(left == right);
+                    REQUIRE(resp_content[ipinfo["ip"].GetString()]["proxy"] == "no");
                 }
                 catch (net::exception& e)
                 {
@@ -1169,17 +1168,25 @@ TEST_CASE("proxy") {
                         .send();
                 const auto proxy_content = json_parse(proxy_req.take().content.as_string_view());
 
+                auto url = std::string("https://proxycheck.io/v2/") + ipinfo["ip"].GetString();
                 auto req = net::request_builder()
-                        .url("https://httpbin.org/get?show_env")
+                        .url(url)
+                        .verification(true)
                         .method(net::http_method::GET)
                         .proxy(proxy_content["curl"].GetString())
                         .send();
-                const auto resp = req.take();
-                const auto resp_content = json_parse(resp.content.as_string_view());
-                REQUIRE(resp.http_code() == net::response_code::OK);
-                std::string left{resp_content["headers"]["X-Real-Ip"].GetString()};
-                std::string right{ipinfo["ip"].GetString()};
-                REQUIRE(left != right);
+                try
+                {
+                    const auto resp = req.take();
+                    const auto resp_content = json_parse(resp.content.as_string_view());
+                    REQUIRE(resp.http_code() == net::response_code::OK);
+                    REQUIRE(resp_content["status"] == "denied");
+                }
+                catch (net::exception& e)
+                {
+                    const auto& error = req.get_error();
+                    FAIL("Request failed with: " + error);
+                }
             }
         }
         catch (net::exception& e)
@@ -1190,6 +1197,8 @@ TEST_CASE("proxy") {
     }
 }
 
+#if defined(__linux__)
+// Using darwinssl and schannel backend requires the client-certificate to be installed in the keychain
 SCENARIO("Public key authentication")
 {
     net::performer performer;
@@ -1209,10 +1218,18 @@ SCENARIO("Public key authentication")
                     .client_certificate("./badssl.com-client.p12", net::ssl_cert::P12, "badssl.com")
                     // Depending on where curl is built, the location of certificates are different.
                     // Ubuntu uses /etc/ssl/certs. On macOS no path is required since DarwinSSL uses the cert store.
-                    .verification(true, "/etc/ssl/certs", "")
+                    .verification(true)
                     .send();
-            auto resp = req.take();
-            REQUIRE(resp.http_code() == net::response_code::OK);
+            try
+            {
+                auto resp = req.take();
+                REQUIRE(resp.http_code() == net::response_code::OK);
+            }
+            catch (net::exception& e)
+            {
+                const auto& error = req.get_error();
+                FAIL("Request failed with: " + error);
+            }
         }
         catch(curly_hpp::exception& ex)
         {
@@ -1220,6 +1237,7 @@ SCENARIO("Public key authentication")
         }
     }
 }
+#endif
 
 SCENARIO("Allowing requests to be created in a context that goes of of scope")
 {
