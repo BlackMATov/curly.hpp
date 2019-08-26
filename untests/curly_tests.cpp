@@ -1053,6 +1053,19 @@ TEST_CASE("curly_examples") {
                 .downloader<file_dowloader>("image.jpeg")
                 .send().take();
         }
+
+        {
+            char outfilename[FILENAME_MAX] = "tails-amd64-3.15.iso";
+            struct stat st = { 0 };
+            if (!(stat(outfilename, &st)))
+            {
+                net::request_builder()
+                    .url("https://ftp.acc.umu.se/tails/stable/tails-amd64-3.15/tails-amd64-3.15.iso")
+                    .downloader<file_dowloader>(outfilename)
+                    .resume_offset(st.st_size)
+                    .send().take();
+            }
+        }
         {
             class file_uploader : public net::upload_handler {
             public:
