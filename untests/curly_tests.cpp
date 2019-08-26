@@ -9,6 +9,7 @@
 #include <fstream>
 #include <utility>
 #include <iostream>
+#include <sys/stat.h>
 
 #include <rapidjson/document.h>
 namespace json = rapidjson;
@@ -1056,7 +1057,7 @@ TEST_CASE("curly_examples") {
 
         {
             char outfilename[FILENAME_MAX] = "tails-amd64-3.15.iso";
-            struct stat st = { 0 };
+            struct stat st{};
             if (!(stat(outfilename, &st)))
             {
                 net::request_builder()
@@ -1114,7 +1115,7 @@ TEST_CASE("curly_examples") {
     }
 }
 
-TEST_CASE("proxy") {
+TEST_CASE("proxy", "[!mayfail]") {
     net::performer performer;
 
     {
@@ -1166,8 +1167,10 @@ TEST_CASE("proxy") {
                         .url("https://gimmeproxy.com/api/getProxy")
                         .method(net::http_method::GET)
                         .send();
-                const auto proxy_content = json_parse(proxy_req.take().content.as_string_view());
+                const auto proxy_resp = proxy_req.take();
+                REQUIRE(proxy_resp.http_code() == net::response_code::OK);
 
+                const auto proxy_content = json_parse(proxy_resp.content.as_string_view());
                 auto url = std::string("https://proxycheck.io/v2/") + ipinfo["ip"].GetString();
                 auto req = net::request_builder()
                         .url(url)
