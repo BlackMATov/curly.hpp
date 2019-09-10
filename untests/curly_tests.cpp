@@ -14,6 +14,9 @@
 #include <filesystem>
 using namespace std::filesystem;
 
+#include <string_view>
+using namespace std::literals;
+
 #include <rapidjson/document.h>
 namespace json = rapidjson;
 
@@ -1216,18 +1219,26 @@ SCENARIO("Public key authentication")
         {
             net::request_builder()
                     .url("https://badssl.com/certs/badssl.com-client.p12")
-                    .downloader<file_downloader>("badssl.com-client.p12")
+                    .downloader<file_downloader>("./badssl.com-client.p12")
                     .send()
                     .take();
 
-            auto req = net::request_builder()
-                    .url("https://client.badssl.com")
-                    .method(net::http_method::GET)
-                    .client_certificate("./badssl.com-client.p12", net::ssl_cert::P12, "badssl.com")
-                    // Depending on where curl is built, the location of certificates are different.
-                    // Ubuntu uses /etc/ssl/certs. On macOS no path is required since DarwinSSL uses the cert store.
-                    .verification(true)
-                    .send();
+            auto builder = net::request_builder();
+
+            builder.url("https://client.badssl.com")
+            .method(net::http_method::GET)
+            .client_certificate("./badssl.com-client.p12", net::ssl_cert::P12, "badssl.com")
+            // Depending on where curl is built, the location of certificates are different.
+            // Ubuntu uses /etc/ssl/certs. On macOS no path is required since DarwinSSL uses the cert store.
+            // As it is impossible to setup this test to work on all machines with TLS-chain verification,
+            // verification must be disabled.
+            .verification(false);
+
+            REQUIRE(builder.certificate_password() == "badssl.com");
+            REQUIRE(std::string{builder.certificate_type()} == net::ssl_cert::P12.type());
+
+            auto req = builder.send();
+
             try
             {
                 auto resp = req.take();
@@ -1288,6 +1299,31 @@ SCENARIO("Translating response codes")
 {
     REQUIRE("OK" == net::as_string(net::response_code::OK));
     REQUIRE("Invalid response code" == net::as_string(static_cast<net::response_code>(9999)));
+}
+
+SCENARIO("Escaped content")
+{
+    net::performer performer{};
+
+    net::qparams_t params{};
+    const auto content_1 =  R"!!(%&/()= )!!"sv;
+    const auto content_2 = R"!!(!"#¤%&/()=? )!!"sv;
+
+    params.emplace("1",content_1 );
+    params.emplace("2", content_2);
+
+    auto resp = net::request_builder(net::http_method::POST)
+            .url("http://httpbin.org/anything")
+            .header("accept", "application/json")
+            .content(params)
+            .send().take();
+
+    REQUIRE(resp.http_code() == net::response_code::OK);
+
+    auto data = json_parse(resp.content.as_string_view());
+
+    REQUIRE(data["form"]["1"].GetString() == content_1);
+    REQUIRE(data["form"]["2"].GetString() == content_2);
 }
 
 SCENARIO("Resume download")
