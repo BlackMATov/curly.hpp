@@ -11,6 +11,9 @@
 #include <iostream>
 #include <sys/stat.h>
 
+#include <filesystem>
+using namespace std::filesystem;
+
 #include <rapidjson/document.h>
 namespace json = rapidjson;
 
@@ -95,9 +98,9 @@ namespace
         });
     }
 
-    class file_dowloader : public net::download_handler {
+    class file_downloader : public net::download_handler {
     public:
-        file_dowloader(const char* filename)
+        file_downloader(const char* filename)
                 : stream_(filename, std::ofstream::binary) {}
 
         std::size_t write(const char* src, std::size_t size) override {
@@ -1051,22 +1054,10 @@ TEST_CASE("curly_examples") {
         {
             net::request_builder()
                 .url("https://httpbin.org/image/jpeg")
-                .downloader<file_dowloader>("image.jpeg")
+                .downloader<file_downloader>("image.jpeg")
                 .send().take();
         }
 
-        {
-            char outfilename[FILENAME_MAX] = "tails-amd64-3.15.iso";
-            struct stat st{};
-            if (!(stat(outfilename, &st)))
-            {
-                net::request_builder()
-                    .url("https://ftp.acc.umu.se/tails/stable/tails-amd64-3.15/tails-amd64-3.15.iso")
-                    .downloader<file_dowloader>(outfilename)
-                    .resume_offset(st.st_size)
-                    .send().take();
-            }
-        }
         {
             class file_uploader : public net::upload_handler {
             public:
@@ -1146,7 +1137,6 @@ TEST_CASE("proxy", "[!mayfail]") {
                 auto req = net::request_builder()
                         .url(url)
                         .method(net::http_method::GET)
-                        .verification(true)
                         .send();
                 try {
                     const auto resp = req.take();
@@ -1187,7 +1177,6 @@ TEST_CASE("proxy", "[!mayfail]") {
                     auto url = std::string("https://proxycheck.io/v2/") + ipinfo["ip"].GetString();
                     auto req = net::request_builder()
                             .url(url)
-                            .verification(true)
                             .method(net::http_method::GET)
                             .proxy(proxy_address, "user", "password")
                             .send();
@@ -1227,7 +1216,7 @@ SCENARIO("Public key authentication")
         {
             net::request_builder()
                     .url("https://badssl.com/certs/badssl.com-client.p12")
-                    .downloader<file_dowloader>("badssl.com-client.p12")
+                    .downloader<file_downloader>("badssl.com-client.p12")
                     .send()
                     .take();
 
@@ -1299,4 +1288,59 @@ SCENARIO("Translating response codes")
 {
     REQUIRE("OK" == net::as_string(net::response_code::OK));
     REQUIRE("Invalid response code" == net::as_string(static_cast<net::response_code>(9999)));
+}
+
+SCENARIO("Resume download")
+{
+    const char* url = "https://cdimage.debian.org/debian-cd/current/amd64/iso-dvd/SHA256SUMS";
+    const char* local_file = "test-file";
+    net::performer performer{};
+
+    try
+    {
+        if (is_regular_file(local_file))
+        {
+            remove(local_file);
+        }
+
+        {
+            // First download the entire file
+            auto resp = net::request_builder()
+                    .url(url)
+                    .downloader<file_downloader>(local_file)
+                    .send().take();
+
+            REQUIRE(resp.http_code() == net::response_code::OK);
+        }
+
+        // Get file size
+        auto size = file_size(local_file);
+        REQUIRE(size > 0);
+        remove(local_file);
+
+        // Now download a part of it
+        const auto offset = size - size / 2;
+        const auto expected_size = size - offset;
+
+        {
+            auto resp = net::request_builder()
+                    .url(url)
+                    .downloader<file_downloader>(local_file)
+                    .resume_offset(offset)
+                    .send().take();
+
+            REQUIRE(resp.http_code() == net::response_code::Partial_Content);
+        }
+        REQUIRE(file_size(local_file) == expected_size);
+    }
+    catch(std::exception& ex)
+    {
+        FAIL(ex.what());
+    }
+
+    // Always cleanup downloaded file
+    if (is_regular_file(local_file))
+    {
+        remove(local_file);
+    }
 }

@@ -31,6 +31,16 @@ target_compile_options(${PROJECT_NAME}
     $<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:
         -Wall -Wextra -Wpedantic>)
 
+# When compiling on Ubuntu 19:04 with gcc 8.3.0, there is an issue with the libraries:
+# https://stackoverflow.com/questions/56615841/passing-stdfilesystempath-to-a-function-segfaults/56864842#56864842
+# so we link explicitly against stdc++fs
+if(CMAKE_CXX_COMPILER_VERSION VERSION_EQUAL "8.3.0")
+    target_link_libraries(
+            ${PROJECT_NAME}
+            $<$<CXX_COMPILER_ID:GNU>:-lstdc++fs>
+    )
+endif()
+
 add_test(${PROJECT_NAME} ${PROJECT_NAME})
 
 #
