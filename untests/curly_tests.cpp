@@ -1164,32 +1164,48 @@ TEST_CASE("proxy", "[!mayfail]") {
             SECTION("With proxy")
             {
                 auto proxy_req = net::request_builder()
-                        .url("https://gimmeproxy.com/api/getProxy")
+                        .url("http://pubproxy.com/api/proxy?format=json&type=http&speed=15&limit=5")
                         .method(net::http_method::GET)
                         .send();
-                const auto proxy_resp = proxy_req.take();
+                auto proxy_resp = proxy_req.take();
                 REQUIRE(proxy_resp.http_code() == net::response_code::OK);
 
-                const auto proxy_content = json_parse(proxy_resp.content.as_string_view());
-                auto url = std::string("https://proxycheck.io/v2/") + ipinfo["ip"].GetString();
-                auto req = net::request_builder()
-                        .url(url)
-                        .verification(true)
-                        .method(net::http_method::GET)
-                        .proxy(proxy_content["curl"].GetString())
-                        .send();
-                try
+                // Try each proxy until we succeed.
+                auto proxy_content = json_parse(proxy_resp.content.as_string_view());
+
+                auto& data = proxy_content["data"];
+
+                auto success = false;
+                auto i = -1;
+
+                while(!success && ++i < 5)
                 {
-                    const auto resp = req.take();
-                    const auto resp_content = json_parse(resp.content.as_string_view());
-                    REQUIRE(resp.http_code() == net::response_code::OK);
-                    REQUIRE(resp_content["status"] == "denied");
+                    const auto& proxy = data[i];
+                    auto proxy_address = std::string("http://") + proxy["ipPort"].GetString();
+                    std::cout << "Trying proxy: " << proxy_address;
+
+                    auto url = std::string("https://proxycheck.io/v2/") + ipinfo["ip"].GetString();
+                    auto req = net::request_builder()
+                            .url(url)
+                            .verification(true)
+                            .method(net::http_method::GET)
+                            .proxy(proxy_address, "user", "password")
+                            .send();
+
+                    try
+                    {
+                        const auto resp = req.take();
+                        const auto resp_content = json_parse(resp.content.as_string_view());
+                        success = resp.http_code() == net::response_code::OK && resp_content["status"] == "denied";
+                    }
+                    catch (net::exception& e)
+                    {
+                        const auto& error = req.get_error();
+                        std::cout << "Request using proxy " << proxy_address << " failed with: " << error;
+                    }
                 }
-                catch (net::exception& e)
-                {
-                    const auto& error = req.get_error();
-                    FAIL("Request failed with: " + error);
-                }
+
+                REQUIRE(success);
             }
         }
         catch (net::exception& e)
