@@ -11,9 +11,6 @@
 #include <iostream>
 #include <sys/stat.h>
 
-#include <filesystem>
-using namespace std::filesystem;
-
 #include <string_view>
 using namespace std::literals;
 
@@ -113,6 +110,25 @@ namespace
     private:
         std::ofstream stream_;
     };
+
+    // S_ISREG is not defined on windows, this fixes it.
+    #if !defined(S_ISREG) && defined(S_IFMT) && defined(S_IFREG)
+    #define S_ISREG(m) (((m) & S_IFMT) == S_IFREG)
+    #endif
+
+    bool is_regular_file(const char* file)
+    {
+        struct stat st{};
+        stat(file, &st);
+        return S_ISREG(st.st_mode);
+    }
+
+    size_t file_size(const char* file)
+    {
+        struct stat st{};
+        stat(file, &st);
+        return st.st_size;
+    }
 }
 
 TEST_CASE("curly") {
@@ -1140,6 +1156,7 @@ TEST_CASE("proxy", "[!mayfail]") {
                 auto req = net::request_builder()
                         .url(url)
                         .method(net::http_method::GET)
+                        .verification(true)
                         .send();
                 try {
                     const auto resp = req.take();
@@ -1182,6 +1199,7 @@ TEST_CASE("proxy", "[!mayfail]") {
                             .url(url)
                             .method(net::http_method::GET)
                             .proxy(proxy_address, "user", "password")
+                            .verification(true)
                             .send();
 
                     try
