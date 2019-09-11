@@ -11,6 +11,12 @@
 #include <iostream>
 #include <sys/stat.h>
 
+#include <filesystem>
+using namespace std::filesystem;
+
+#include <string_view>
+using namespace std::literals;
+
 #include <rapidjson/document.h>
 namespace json = rapidjson;
 
@@ -95,9 +101,9 @@ namespace
         });
     }
 
-    class file_dowloader : public net::download_handler {
+    class file_downloader : public net::download_handler {
     public:
-        file_dowloader(const char* filename)
+        file_downloader(const char* filename)
                 : stream_(filename, std::ofstream::binary) {}
 
         std::size_t write(const char* src, std::size_t size) override {
@@ -1051,22 +1057,10 @@ TEST_CASE("curly_examples") {
         {
             net::request_builder()
                 .url("https://httpbin.org/image/jpeg")
-                .downloader<file_dowloader>("image.jpeg")
+                .downloader<file_downloader>("image.jpeg")
                 .send().take();
         }
 
-        {
-            char outfilename[FILENAME_MAX] = "tails-amd64-3.15.iso";
-            struct stat st{};
-            if (!(stat(outfilename, &st)))
-            {
-                net::request_builder()
-                    .url("https://ftp.acc.umu.se/tails/stable/tails-amd64-3.15/tails-amd64-3.15.iso")
-                    .downloader<file_dowloader>(outfilename)
-                    .resume_offset(st.st_size)
-                    .send().take();
-            }
-        }
         {
             class file_uploader : public net::upload_handler {
             public:
@@ -1146,7 +1140,6 @@ TEST_CASE("proxy", "[!mayfail]") {
                 auto req = net::request_builder()
                         .url(url)
                         .method(net::http_method::GET)
-                        .verification(true)
                         .send();
                 try {
                     const auto resp = req.take();
@@ -1164,32 +1157,47 @@ TEST_CASE("proxy", "[!mayfail]") {
             SECTION("With proxy")
             {
                 auto proxy_req = net::request_builder()
-                        .url("https://gimmeproxy.com/api/getProxy")
+                        .url("http://pubproxy.com/api/proxy?format=json&type=http&speed=15&limit=5")
                         .method(net::http_method::GET)
                         .send();
-                const auto proxy_resp = proxy_req.take();
+                auto proxy_resp = proxy_req.take();
                 REQUIRE(proxy_resp.http_code() == net::response_code::OK);
 
-                const auto proxy_content = json_parse(proxy_resp.content.as_string_view());
-                auto url = std::string("https://proxycheck.io/v2/") + ipinfo["ip"].GetString();
-                auto req = net::request_builder()
-                        .url(url)
-                        .verification(true)
-                        .method(net::http_method::GET)
-                        .proxy(proxy_content["curl"].GetString())
-                        .send();
-                try
+                // Try each proxy until we succeed.
+                auto proxy_content = json_parse(proxy_resp.content.as_string_view());
+
+                auto& data = proxy_content["data"];
+
+                auto success = false;
+                auto i = -1;
+
+                while(!success && ++i < 5)
                 {
-                    const auto resp = req.take();
-                    const auto resp_content = json_parse(resp.content.as_string_view());
-                    REQUIRE(resp.http_code() == net::response_code::OK);
-                    REQUIRE(resp_content["status"] == "denied");
+                    const auto& proxy = data[i];
+                    auto proxy_address = std::string("http://") + proxy["ipPort"].GetString();
+                    std::cout << "Trying proxy: " << proxy_address;
+
+                    auto url = std::string("https://proxycheck.io/v2/") + ipinfo["ip"].GetString();
+                    auto req = net::request_builder()
+                            .url(url)
+                            .method(net::http_method::GET)
+                            .proxy(proxy_address, "user", "password")
+                            .send();
+
+                    try
+                    {
+                        const auto resp = req.take();
+                        const auto resp_content = json_parse(resp.content.as_string_view());
+                        success = resp.http_code() == net::response_code::OK && resp_content["status"] == "denied";
+                    }
+                    catch (net::exception& e)
+                    {
+                        const auto& error = req.get_error();
+                        std::cout << "Request using proxy " << proxy_address << " failed with: " << error;
+                    }
                 }
-                catch (net::exception& e)
-                {
-                    const auto& error = req.get_error();
-                    FAIL("Request failed with: " + error);
-                }
+
+                REQUIRE(success);
             }
         }
         catch (net::exception& e)
@@ -1211,18 +1219,26 @@ SCENARIO("Public key authentication")
         {
             net::request_builder()
                     .url("https://badssl.com/certs/badssl.com-client.p12")
-                    .downloader<file_dowloader>("badssl.com-client.p12")
+                    .downloader<file_downloader>("./badssl.com-client.p12")
                     .send()
                     .take();
 
-            auto req = net::request_builder()
-                    .url("https://client.badssl.com")
-                    .method(net::http_method::GET)
-                    .client_certificate("./badssl.com-client.p12", net::ssl_cert::P12, "badssl.com")
-                    // Depending on where curl is built, the location of certificates are different.
-                    // Ubuntu uses /etc/ssl/certs. On macOS no path is required since DarwinSSL uses the cert store.
-                    .verification(true)
-                    .send();
+            auto builder = net::request_builder();
+
+            builder.url("https://client.badssl.com")
+            .method(net::http_method::GET)
+            .client_certificate("./badssl.com-client.p12", net::ssl_cert::P12, "badssl.com")
+            // Depending on where curl is built, the location of certificates are different.
+            // Ubuntu uses /etc/ssl/certs. On macOS no path is required since DarwinSSL uses the cert store.
+            // As it is impossible to setup this test to work on all machines with TLS-chain verification,
+            // verification must be disabled.
+            .verification(false);
+
+            REQUIRE(builder.certificate_password() == "badssl.com");
+            REQUIRE(std::string{builder.certificate_type()} == net::ssl_cert::P12.type());
+
+            auto req = builder.send();
+
             try
             {
                 auto resp = req.take();
@@ -1283,4 +1299,84 @@ SCENARIO("Translating response codes")
 {
     REQUIRE("OK" == net::as_string(net::response_code::OK));
     REQUIRE("Invalid response code" == net::as_string(static_cast<net::response_code>(9999)));
+}
+
+SCENARIO("Escaped content")
+{
+    net::performer performer{};
+
+    net::qparams_t params{};
+    const auto content_1 =  R"!!(%&/()= )!!"sv;
+    const auto content_2 = R"!!(!"#¤%&/()=? )!!"sv;
+
+    params.emplace("1",content_1 );
+    params.emplace("2", content_2);
+
+    auto resp = net::request_builder(net::http_method::POST)
+            .url("http://httpbin.org/anything")
+            .header("accept", "application/json")
+            .content(params)
+            .send().take();
+
+    REQUIRE(resp.http_code() == net::response_code::OK);
+
+    auto data = json_parse(resp.content.as_string_view());
+
+    REQUIRE(data["form"]["1"].GetString() == content_1);
+    REQUIRE(data["form"]["2"].GetString() == content_2);
+}
+
+SCENARIO("Resume download")
+{
+    const char* url = "https://cdimage.debian.org/debian-cd/current/amd64/iso-dvd/SHA256SUMS";
+    const char* local_file = "test-file";
+    net::performer performer{};
+
+    try
+    {
+        if (is_regular_file(local_file))
+        {
+            remove(local_file);
+        }
+
+        {
+            // First download the entire file
+            auto resp = net::request_builder()
+                    .url(url)
+                    .downloader<file_downloader>(local_file)
+                    .send().take();
+
+            REQUIRE(resp.http_code() == net::response_code::OK);
+        }
+
+        // Get file size
+        auto size = file_size(local_file);
+        REQUIRE(size > 0);
+        remove(local_file);
+
+        // Now download a part of it
+        const auto offset = size - size / 2;
+        const auto expected_size = size - offset;
+
+        {
+            auto resp = net::request_builder()
+                    .url(url)
+                    .downloader<file_downloader>(local_file)
+                    .resume_offset(offset)
+                    .send().take();
+
+            REQUIRE(resp.http_code() == net::response_code::Partial_Content);
+        }
+        REQUIRE(file_size(local_file) == expected_size);
+    }
+    catch(std::exception& ex)
+    {
+        FAIL(ex.what());
+    }
+
+    // Always cleanup downloaded file
+    if (is_regular_file(local_file))
+    {
+        remove(local_file);
+    }
 }
