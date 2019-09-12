@@ -91,16 +91,15 @@ target_link_libraries(${PROJECT_NAME} PUBLIC Threads::Threads)
 
 if(USE_SYSTEM_CURL)
     find_package(CURL REQUIRED)
-    target_link_libraries(${PROJECT_NAME} PUBLIC ${CURL_LIBRARIES})
-    target_include_directories(${PROJECT_NAME} PRIVATE ${CURL_INCLUDE_DIRS})
-endif()
+    target_link_libraries(${PROJECT_NAME} PUBLIC CURL::libcurl)
+endif(USE_SYSTEM_CURL)
 
 if(USE_EMBEDDED_CURL)
     include(FetchContent)
     FetchContent_Declare(
         embedded_curl
         GIT_REPOSITORY https://github.com/curl/curl
-        GIT_TAG curl-7_65_1)
+        GIT_TAG curl-7_66_0)
 
     FetchContent_GetProperties(embedded_curl)
     if(NOT embedded_curl_POPULATED)
@@ -138,7 +137,7 @@ if(USE_EMBEDDED_CURL)
     add_subdirectory(${embedded_curl_SOURCE_DIR} ${embedded_curl_BINARY_DIR})
     target_link_libraries(${PROJECT_NAME} PUBLIC libcurl)
     target_include_directories(${PROJECT_NAME} PRIVATE ${CURL_SOURCE_DIR}/include)
-endif()
+endif(USE_EMBEDDED_CURL)
 
 #
 # unit tests
@@ -150,4 +149,4 @@ if(BUILD_AS_STANDALONE)
         enable_testing()
         add_subdirectory(untests)
     endif()
-endif()
+endif(BUILD_AS_STANDALONE)
