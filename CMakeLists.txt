@@ -8,6 +8,7 @@ endif()
 project(curly.hpp)
 
 option(USE_STATIC_CRT "Use static C runtime library" OFF)
+option(USE_CONAN_CURL "Build with cURL from Conan" OFF)
 option(USE_SYSTEM_CURL "Build with cURL from system paths" OFF)
 option(USE_EMBEDDED_CURL "Build with embedded cURL library" ON)
 
@@ -88,6 +89,16 @@ target_compile_options(${PROJECT_NAME}
 
 find_package(Threads REQUIRED)
 target_link_libraries(${PROJECT_NAME} PUBLIC Threads::Threads)
+
+if(USE_CONAN_CURL)
+    if(EXISTS ${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
+        include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
+    else()
+        message(FATAL_ERROR "The file conanbuildinfo.cmake doesn't exist, run conan install from ${CMAKE_BINARY_DIR} first")
+    endif()
+    conan_basic_setup(TARGETS)
+    target_link_libraries(${PROJECT_NAME} PUBLIC CONAN_PKG::libcurl)
+endif(USE_CONAN_CURL)
 
 if(USE_SYSTEM_CURL)
     find_package(CURL REQUIRED)

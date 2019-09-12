@@ -47,6 +47,7 @@ target_link_libraries(your_project_target curly.hpp)
 ### CMake options
 
 * `USE_STATIC_CRT` Use static C runtime library. Default: OFF
+* `USE_CONAN_CURL` Build with cURL from Conan. Default: OFF
 * `USE_SYSTEM_CURL` Build with cURL from system paths. Default: OFF
 * `USE_EMBEDDED_CURL` Build with embedded cURL library. Default: ON
 
