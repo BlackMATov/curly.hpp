@@ -133,6 +133,63 @@ namespace curly_hpp
 
 namespace curly_hpp
 {
+    class proxy_t final {
+    public:
+        proxy_t() = default;
+
+        proxy_t(proxy_t&&) = default;
+        proxy_t& operator=(proxy_t&&) = default;
+
+        proxy_t(const proxy_t&) = default;
+        proxy_t& operator=(const proxy_t&) = default;
+
+        proxy_t(std::string proxy)
+        : proxy_(std::move(proxy)) {}
+
+        proxy_t(std::string proxy, std::string username)
+        : proxy_(std::move(proxy))
+        , username_(std::move(username)) {}
+
+        proxy_t(std::string proxy, std::string username, std::string password)
+        : proxy_(std::move(proxy))
+        , username_(std::move(username))
+        , password_(std::move(password)) {}
+
+        proxy_t& proxy(std::string v) {
+            proxy_ = std::move(v);
+            return *this;
+        }
+
+        proxy_t& username(std::string v) {
+            username_ = std::move(v);
+            return *this;
+        }
+
+        proxy_t& password(std::string v) {
+            password_ = std::move(v);
+            return *this;
+        }
+
+        const std::string& proxy() const noexcept {
+            return proxy_;
+        }
+
+        const std::string& username() const noexcept {
+            return username_;
+        }
+
+        const std::string& password() const noexcept {
+            return password_;
+        }
+    private:
+        std::string proxy_;
+        std::string username_;
+        std::string password_;
+    };
+}
+
+namespace curly_hpp
+{
     class content_t final {
     public:
         content_t() = default;
@@ -276,6 +333,7 @@ namespace curly_hpp
         explicit request_builder(http_method m, std::string u) noexcept;
 
         request_builder& url(std::string u) noexcept;
+        request_builder& proxy(proxy_t p) noexcept;
         request_builder& method(http_method m) noexcept;
 
         request_builder& qparams(qparam_ilist_t ps);
@@ -299,6 +357,7 @@ namespace curly_hpp
         request_builder& progressor(progressor_uptr p) noexcept;
 
         const std::string& url() const noexcept;
+        const proxy_t& proxy() const noexcept;
         http_method method() const noexcept;
         const qparams_t& qparams() const noexcept;
         const headers_t& headers() const noexcept;
@@ -378,6 +437,7 @@ namespace curly_hpp
         }
     private:
         std::string url_;
+        proxy_t proxy_;
         http_method method_{http_method::GET};
         qparams_t qparams_;
         headers_t headers_;

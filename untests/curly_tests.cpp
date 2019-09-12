@@ -749,6 +749,45 @@ TEST_CASE("curly") {
         }
     }
 
+    SECTION("proxy") {
+        auto get_resp = net::request_builder("https://httpbin.org/get")
+            .send()
+            .take();
+        REQUIRE(get_resp.http_code() == 200u);
+        const auto cont_j = json_parse(get_resp.content.as_string_view());
+        const std::string my_origin = cont_j["origin"].GetString();
+
+        bool success = false;
+
+        for ( std::size_t i = 0; i < 5 && !success; ++i ) {
+            auto proxy_resp = net::request_builder()
+                .url("http://pubproxy.com/api/proxy?format=json&type=http&last_check=60&speed=20&limit=5")
+                .send()
+                .take();
+            REQUIRE(proxy_resp.http_code() == 200u);
+
+            const auto proxy_cont_j = json_parse(proxy_resp.content.as_string_view());
+            const auto& proxy_list = proxy_cont_j["data"];
+
+            for ( std::size_t i = 0; i < proxy_list.Size() && !success; ++i ) {
+                auto proxy_address = std::string("http://") + proxy_list[i]["ipPort"].GetString();
+                auto req = net::request_builder("https://httpbin.org/get")
+                    .proxy(net::proxy_t(proxy_address))
+                    .send();
+                if ( req.wait() == net::req_status::done ) {
+                    auto resp = req.take();
+                    if ( resp.http_code() == 200u ) {
+                        const std::string proxy_ip = proxy_list[i]["ip"].GetString();
+                        const auto cont_j = json_parse(resp.content.as_string_view());
+                        success = my_origin != cont_j["origin"].GetString();
+                    }
+                }
+            }
+        }
+
+        REQUIRE(success);
+    }
+
     SECTION("ssl_verification") {
         {
             auto req0 = net::request_builder("https://expired.badssl.com")

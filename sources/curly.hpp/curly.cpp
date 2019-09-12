@@ -344,6 +344,12 @@ namespace curly_hpp
             curl_easy_setopt(curlh_.get(), CURLOPT_HTTPHEADER, hlist_.get());
             curl_easy_setopt(curlh_.get(), CURLOPT_VERBOSE, breq_.verbose() ? 1l : 0l);
 
+            if ( !breq_.proxy().proxy().empty() ) {
+                curl_easy_setopt(curlh_.get(), CURLOPT_PROXY, breq_.proxy().proxy().c_str());
+                curl_easy_setopt(curlh_.get(), CURLOPT_PROXYUSERNAME, breq_.proxy().username().c_str());
+                curl_easy_setopt(curlh_.get(), CURLOPT_PROXYPASSWORD, breq_.proxy().password().c_str());
+            }
+
             switch ( breq_.method() ) {
             case http_method::DEL:
                 curl_easy_setopt(curlh_.get(), CURLOPT_CUSTOMREQUEST, "DELETE");
@@ -850,6 +856,11 @@ namespace curly_hpp
         return *this;
     }
 
+    request_builder& request_builder::proxy(proxy_t p) noexcept {
+        proxy_ = std::move(p);
+        return *this;
+    }
+
     request_builder& request_builder::method(http_method m) noexcept {
         method_ = m;
         return *this;
@@ -941,6 +952,10 @@ namespace curly_hpp
 
     const std::string& request_builder::url() const noexcept {
         return url_;
+    }
+
+    const proxy_t& request_builder::proxy() const noexcept {
+        return proxy_;
     }
 
     http_method request_builder::method() const noexcept {
