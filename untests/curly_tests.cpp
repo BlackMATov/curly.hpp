@@ -1226,9 +1226,9 @@ TEST_CASE("proxy", "[!mayfail]") {
     }
 }
 
-#if defined(__linux__)
-// Using darwinssl and schannel backend requires the client-certificate to be installed in the keychain
-SCENARIO("Public key authentication")
+
+// This test will fail on macOS and windows as the ssl backend requires the client-certificate to be installed in the keychain
+SCENARIO("Public key authentication", "[!mayfail]")
 {
     net::performer performer;
     WHEN("Downloading P12 client cert")
@@ -1264,8 +1264,10 @@ SCENARIO("Public key authentication")
             }
             catch (net::exception& e)
             {
+#if defined(__linux__)
                 const auto& error = req.get_error();
                 FAIL("Request failed with: " + error);
+#endif
             }
         }
         catch(curly_hpp::exception& ex)
@@ -1274,7 +1276,6 @@ SCENARIO("Public key authentication")
         }
     }
 }
-#endif
 
 SCENARIO("Allowing requests to be created in a context that goes of of scope")
 {
@@ -1396,5 +1397,88 @@ SCENARIO("Resume download")
     if (is_regular_file(local_file))
     {
         remove(local_file);
+    }
+}
+
+SCENARIO("Custom CABundle")
+{
+    const char *url = "https://curl.haxx.se/ca/cacert.pem";
+    const char *local_file = "cacert.pem";
+    net::performer performer{};
+
+    try
+    {
+        WHEN("Non-existing cabundle")
+        {
+            auto req = net::request_builder("https://sha256.badssl.com")
+                    .method(net::http_method::HEAD)
+                    .verification(true, std::nullopt, local_file)
+                    .send();
+            REQUIRE(req.wait() == net::req_status::failed);
+        }
+
+        WHEN("Existing ca-bundle")
+        {
+            if (is_regular_file(local_file))
+            {
+                remove(local_file);
+            }
+            {
+                // First download the entire file
+                auto resp = net::request_builder()
+                        .url(url)
+                        .downloader<file_downloader>(local_file)
+                        .send().take();
+
+                REQUIRE(resp.http_code() == net::response_code::OK);
+            }
+            auto req = net::request_builder("https://sha256.badssl.com")
+                    .method(net::http_method::HEAD)
+                    .verification(true, std::nullopt, local_file)
+                    .send();
+            REQUIRE(req.wait() == net::req_status::done);
+        }
+    }
+    catch (std::exception &ex)
+    {
+        FAIL(ex.what());
+    }
+
+    // Always cleanup downloaded file
+    if (is_regular_file(local_file))
+    {
+        remove(local_file);
+    }
+}
+
+SCENARIO("Public key pinning")
+{
+    try
+    {
+        net::performer performer{};
+        constexpr const char* url = "https://httpbin.org/status/200";
+        WHEN("Using a mismatching public key signature")
+        {
+            auto req1 = net::request_builder(url)
+                    .method(net::http_method::GET)
+                    .verification(true)
+                    .pinned_public_key("sha256//9SLklscvzMYj8f+52lp5ze/hY0CFHyLSPQzSpYYIBm8=")
+                    .send();
+            REQUIRE(req1.get_error() == "Pinned pubkey mismatch");
+            REQUIRE(req1.status() == net::req_status::failed);
+        }
+        AND_WHEN("Using a matching public key signature")
+        {
+            auto req2 = net::request_builder(url)
+                    .method(net::http_method::GET)
+                    .verification(true)
+                    .pinned_public_key("sha256//Yvh6l+lXgqrBJrCtxwr9r/vbERE37/5/p6AaRRsiboQ=")
+                    .send();
+            REQUIRE(req2.take().http_code() == net::response_code::OK);
+        }
+    }
+    catch (std::exception &ex)
+    {
+        FAIL(ex.what());
     }
 }

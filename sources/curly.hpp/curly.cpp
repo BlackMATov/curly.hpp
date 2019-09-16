@@ -21,6 +21,7 @@
 #endif
 
 #include <curl/curl.h>
+#include <iostream>
 
 // -----------------------------------------------------------------------------
 //
@@ -428,6 +429,10 @@ namespace curly_hpp
                 }
             }
 
+            if ( !breq_.pinned_public_key().empty() ) {
+                curl_easy_setopt(curlh_.get(), CURLOPT_PINNEDPUBLICKEY, breq_.pinned_public_key().c_str());
+            }
+
             curl_easy_setopt(curlh_.get(), CURLOPT_CONNECTTIMEOUT_MS,
                 static_cast<long>(std::max(time_ms_t(1), breq_.connection_timeout()).count()));
 
@@ -465,6 +470,7 @@ namespace curly_hpp
         bool done() noexcept {
             std::lock_guard<std::mutex> guard(mutex_);
             if ( status_ != req_status::pending ) {
+                cvar_.notify_all();
                 return false;
             }
 
@@ -528,6 +534,10 @@ namespace curly_hpp
                 case CURLE_ABORTED_BY_CALLBACK:
                     status_ = req_status::cancelled;
                     error_.assign("Callback aborted");
+                    break;
+                case CURLE_SSL_PINNEDPUBKEYNOTMATCH:
+                    status_ = req_status::failed;
+                    error_.assign("Pinned pubkey mismatch");
                     break;
                 default:
                     status_ = req_status::failed;
@@ -1011,6 +1021,12 @@ namespace curly_hpp
         return *this;
     }
 
+    request_builder& request_builder::pinned_public_key(std::string pubkey) noexcept
+    {
+        pinned_public_key_ = std::move(pubkey);
+        return *this;
+    }
+
     const std::string& request_builder::url() const noexcept {
         return url_;
     }
@@ -1040,6 +1056,11 @@ namespace curly_hpp
 
     const char* request_builder::certificate_type() const noexcept {
         return client_cert_type_.type();
+    }
+
+    const std::string& request_builder::pinned_public_key() const noexcept
+    {
+        return pinned_public_key_;
     }
 
     http_method request_builder::method() const noexcept {

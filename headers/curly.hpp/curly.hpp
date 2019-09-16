@@ -329,6 +329,7 @@ namespace curly_hpp
         request_builder& client_certificate(std::string cert,
                                             ssl_cert_enum type = ssl_cert::PEM,
                                             std::optional<std::string> pw = std::nullopt ) noexcept;
+        request_builder& pinned_public_key(std::string pubkey) noexcept;
 
         const std::string& url() const noexcept;
         http_method method() const noexcept;
@@ -344,6 +345,8 @@ namespace curly_hpp
 
         const std::optional<std::string>& client_certificate() const noexcept;
         const std::optional<std::string>& certificate_password() const noexcept;
+        const std::string& pinned_public_key() const noexcept;
+
         const char* certificate_type() const noexcept;
 
         bool verbose() const noexcept;
@@ -432,6 +435,7 @@ namespace curly_hpp
         std::optional<std::string> cabundle_;
         std::optional<std::string> client_certificate_;
         std::optional<std::string> client_cert_passw_;
+        std::string pinned_public_key_;
         ssl_cert_enum client_cert_type_{ssl_cert::PEM};
         http_method method_{http_method::GET};
         qparams_t qparams_;
@@ -448,6 +452,7 @@ namespace curly_hpp
         uploader_uptr uploader_;
         downloader_uptr downloader_;
         progressor_uptr progressor_;
+
     };
 }
 
