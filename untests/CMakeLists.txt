@@ -64,3 +64,19 @@ if(NOT tencent_rapidjson_POPULATED)
     target_include_directories(${PROJECT_NAME}
         PRIVATE ${tencent_rapidjson_SOURCE_DIR}/include)
 endif()
+
+#
+# blackmatov/promise.hpp
+#
+
+include(FetchContent)
+FetchContent_Declare(
+    blackmatov_promise_hpp
+    GIT_REPOSITORY https://github.com/blackmatov/promise.hpp)
+
+FetchContent_GetProperties(blackmatov_promise_hpp)
+if(NOT blackmatov_promise_hpp_POPULATED)
+    FetchContent_Populate(blackmatov_promise_hpp)
+    target_include_directories(${PROJECT_NAME}
+        PRIVATE ${blackmatov_promise_hpp_SOURCE_DIR}/headers)
+endif()

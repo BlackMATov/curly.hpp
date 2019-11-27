@@ -8,6 +8,7 @@ endif()
 project(curly.hpp)
 
 option(USE_STATIC_CRT "Use static C runtime library" OFF)
+option(USE_CONAN_CURL "Build with cURL from Conan" OFF)
 option(USE_SYSTEM_CURL "Build with cURL from system paths" OFF)
 option(USE_EMBEDDED_CURL "Build with embedded cURL library" ON)
 
@@ -51,9 +52,22 @@ endif()
 # library
 #
 
+file(GLOB_RECURSE CURLY_HPP_HEADERS
+    headers/curly.hpp/*.hpp
+    headers/curly.hpp/*.inl)
+
+file(GLOB_RECURSE CURLY_HPP_SOURCES
+    sources/curly.hpp/*.cpp
+    sources/curly.hpp/*.hpp
+    sources/curly.hpp/*.inl)
+
 add_library(${PROJECT_NAME} STATIC
-    headers/curly.hpp/curly.hpp
-    sources/curly.cpp)
+    ${CURLY_HPP_HEADERS}
+    ${CURLY_HPP_SOURCES})
+
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES
+    ${CURLY_HPP_HEADERS}
+    ${CURLY_HPP_SOURCES})
 
 target_include_directories(${PROJECT_NAME}
     PUBLIC headers)
@@ -76,18 +90,27 @@ target_compile_options(${PROJECT_NAME}
 find_package(Threads REQUIRED)
 target_link_libraries(${PROJECT_NAME} PUBLIC Threads::Threads)
 
+if(USE_CONAN_CURL)
+    if(EXISTS ${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
+        include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
+    else()
+        message(FATAL_ERROR "The file conanbuildinfo.cmake doesn't exist, run conan install from ${CMAKE_BINARY_DIR} first")
+    endif()
+    conan_basic_setup(TARGETS)
+    target_link_libraries(${PROJECT_NAME} PUBLIC CONAN_PKG::libcurl)
+endif(USE_CONAN_CURL)
+
 if(USE_SYSTEM_CURL)
     find_package(CURL REQUIRED)
-    target_link_libraries(${PROJECT_NAME} PUBLIC ${CURL_LIBRARIES})
-    target_include_directories(${PROJECT_NAME} PRIVATE ${CURL_INCLUDE_DIRS})
-endif()
+    target_link_libraries(${PROJECT_NAME} PUBLIC CURL::libcurl)
+endif(USE_SYSTEM_CURL)
 
 if(USE_EMBEDDED_CURL)
     include(FetchContent)
     FetchContent_Declare(
         embedded_curl
         GIT_REPOSITORY https://github.com/curl/curl
-        GIT_TAG curl-7_65_1)
+        GIT_TAG curl-7_66_0)
 
     FetchContent_GetProperties(embedded_curl)
     if(NOT embedded_curl_POPULATED)
@@ -125,7 +148,7 @@ if(USE_EMBEDDED_CURL)
     add_subdirectory(${embedded_curl_SOURCE_DIR} ${embedded_curl_BINARY_DIR})
     target_link_libraries(${PROJECT_NAME} PUBLIC libcurl)
     target_include_directories(${PROJECT_NAME} PRIVATE ${CURL_SOURCE_DIR}/include)
-endif()
+endif(USE_EMBEDDED_CURL)
 
 #
 # unit tests
@@ -137,4 +160,4 @@ if(BUILD_AS_STANDALONE)
         enable_testing()
         add_subdirectory(untests)
     endif()
-endif()
+endif(BUILD_AS_STANDALONE)
