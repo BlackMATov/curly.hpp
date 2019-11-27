@@ -135,6 +135,169 @@ namespace curly_hpp
 
 namespace curly_hpp
 {
+    class proxy_t final
+    {
+    public:
+        proxy_t() = default;
+
+        proxy_t(proxy_t&&) = default;
+        proxy_t& operator=(proxy_t&&) = default;
+
+        proxy_t(const proxy_t&) = default;
+        proxy_t& operator=(const proxy_t&) = default;
+
+        proxy_t(std::string url) : proxy_(std::move(url))
+        {}
+
+        proxy_t(std::string url, std::string username) :
+            proxy_(std::move(url)),
+            username_(std::move(username))
+        {}
+
+        proxy_t(std::string url, std::string username, std::string password) :
+            proxy_(std::move(url)),
+            username_(std::move(username)),
+            password_(std::move(password))
+        {}
+
+        proxy_t(std::string url, std::string username, std::string password, std::string public_key) :
+                proxy_(std::move(url)),
+                username_(std::move(username)),
+                password_(std::move(password)),
+                public_key_(std::move(public_key))
+        {}
+
+        proxy_t& proxy(std::string url)
+        {
+            proxy_ = std::move(url);
+            return *this;
+        }
+
+        proxy_t& username(std::string username)
+        {
+            username_ = std::move(username);
+            return *this;
+        }
+
+        proxy_t& password(std::string password)
+        {
+            password_ = std::move(password);
+            return *this;
+        }
+
+        proxy_t& public_key(std::string pubkey)
+        {
+            public_key_ = std::move(pubkey);
+            return *this;
+        }
+
+        [[nodiscard]] const std::string& proxy() const noexcept
+        {
+            return proxy_;
+        }
+
+        [[nodiscard]] const std::string& username() const noexcept
+        {
+            return username_;
+        }
+
+        [[nodiscard]] const std::string& password() const noexcept
+        {
+            return password_;
+        }
+
+        [[nodiscard]] const std::string& public_key() const noexcept
+        {
+            return public_key_;
+        }
+
+    private:
+        std::string proxy_{};
+        std::string username_{};
+        std::string password_{};
+        std::string public_key_{};
+    };
+}
+
+namespace curly_hpp
+{
+    class ssl_cert_enum {
+    public:
+        constexpr explicit ssl_cert_enum(const char *name) : name(name) {}
+        [[nodiscard]] const char *type() const { return name; }
+    private:
+        ssl_cert_enum() : name("") {}
+        const char *name;
+    };
+
+    namespace ssl_cert {
+        constexpr ssl_cert_enum PEM("PEM");
+        constexpr ssl_cert_enum DER("DER");
+        constexpr ssl_cert_enum P12("P12");
+    }
+
+    class client_cert_t final
+    {
+    public:
+        client_cert_t() = default;
+
+        client_cert_t(client_cert_t&&) = default;
+        client_cert_t& operator=(client_cert_t&&) = default;
+
+        client_cert_t(const client_cert_t&) = default;
+        client_cert_t& operator=(const client_cert_t&) = default;
+
+        client_cert_t(std::string client_certificate) : certificate_(std::move(client_certificate))
+        {}
+
+        client_cert_t(std::string certificate, ssl_cert_enum type, std::string password)
+        : certificate_(std::move(certificate)),
+          type_(type),
+          password_(std::move(password))
+        {}
+
+        client_cert_t& certificate(std::string certificate)
+        {
+            certificate_ = std::move(certificate);
+            return *this;
+        }
+
+        client_cert_t& password(std::string password)
+        {
+            password_ = std::move(password);
+            return *this;
+        }
+
+        client_cert_t& type(ssl_cert_enum type)
+        {
+            type_ = type;
+            return *this;
+        }
+
+        [[nodiscard]] const std::string& certificate() const noexcept
+        {
+            return certificate_;
+        }
+
+        [[nodiscard]] const std::string& password() const noexcept
+        {
+            return password_;
+        }
+
+        [[nodiscard]] const char* type() const noexcept
+        {
+            return type_.type();
+        }
+
+    private:
+        std::string certificate_{};
+        ssl_cert_enum type_{ssl_cert::PEM};
+        std::string password_{};
+    };
+}
+
+namespace curly_hpp
+{
     class content_t final {
     public:
         content_t() = default;
@@ -263,23 +426,6 @@ namespace curly_hpp
     };
 }
 
-namespace curly_hpp {
-    class ssl_cert_enum {
-    public:
-        constexpr explicit ssl_cert_enum(const char *name) : name(name) {}
-        const char *type() const { return name; }
-    private:
-        ssl_cert_enum() : name("") {}
-        const char *name;
-    };
-
-    namespace ssl_cert {
-        constexpr ssl_cert_enum PEM("PEM");
-        constexpr ssl_cert_enum DER("DER");
-        constexpr ssl_cert_enum P12("P12");
-    }
-}
-
 namespace curly_hpp
 {
     class request_builder final {
@@ -323,40 +469,31 @@ namespace curly_hpp
 
         request_builder& progressor(progressor_uptr p) noexcept;
 
-        request_builder& proxy(std::string p,
-                               std::optional<std::string> u = std::nullopt,
-                               std::optional<std::string> pw = std::nullopt) noexcept;
-        request_builder& client_certificate(std::string cert,
-                                            ssl_cert_enum type = ssl_cert::PEM,
-                                            std::optional<std::string> pw = std::nullopt ) noexcept;
+        request_builder& proxy(proxy_t proxy) noexcept;
+        request_builder& client_certificate(client_cert_t cert) noexcept;
         request_builder& pinned_public_key(std::string pubkey) noexcept;
 
-        const std::string& url() const noexcept;
-        http_method method() const noexcept;
+        [[nodiscard]] const std::string& url() const noexcept;
+        [[nodiscard]] http_method method() const noexcept;
 
-        const std::size_t& resume_offset() const noexcept;
+        [[nodiscard]] const std::size_t& resume_offset() const noexcept;
 
-        const qparams_t& qparams() const noexcept;
-        const headers_t& headers() const noexcept;
+        [[nodiscard]] const qparams_t& qparams() const noexcept;
+        [[nodiscard]] const headers_t& headers() const noexcept;
 
-        const std::optional<std::string>& proxy() const noexcept;
-        const std::optional<std::string>& proxy_username() const noexcept;
-        const std::optional<std::string>& proxy_password() const noexcept;
+        [[nodiscard]] const proxy_t& proxy() const noexcept;
 
-        const std::optional<std::string>& client_certificate() const noexcept;
-        const std::optional<std::string>& certificate_password() const noexcept;
+        const client_cert_t& client_certificate() const noexcept;
         const std::string& pinned_public_key() const noexcept;
 
-        const char* certificate_type() const noexcept;
-
-        bool verbose() const noexcept;
-        bool verification() const noexcept;
-        const std::optional<std::string>& capath() const noexcept;
-        const std::optional<std::string>& cabundle() const noexcept;
-        std::uint32_t redirections() const noexcept;
-        time_ms_t request_timeout() const noexcept;
-        time_ms_t response_timeout() const noexcept;
-        time_ms_t connection_timeout() const noexcept;
+        [[nodiscard]] bool verbose() const noexcept;
+        [[nodiscard]] bool verification() const noexcept;
+        [[nodiscard]] const std::optional<std::string>& capath() const noexcept;
+        [[nodiscard]] const std::optional<std::string>& cabundle() const noexcept;
+        [[nodiscard]] std::uint32_t redirections() const noexcept;
+        [[nodiscard]] time_ms_t request_timeout() const noexcept;
+        [[nodiscard]] time_ms_t response_timeout() const noexcept;
+        [[nodiscard]] time_ms_t connection_timeout() const noexcept;
 
         content_t& content() noexcept;
         const content_t& content() const noexcept;
@@ -428,15 +565,11 @@ namespace curly_hpp
         std::string url_;
         std::size_t resume_offset_{};
 
-        std::optional<std::string> proxy_;
-        std::optional<std::string> proxy_user_;
-        std::optional<std::string> proxy_passw_;
+        proxy_t proxy_;
         std::optional<std::string> capath_;
         std::optional<std::string> cabundle_;
-        std::optional<std::string> client_certificate_;
-        std::optional<std::string> client_cert_passw_;
+        client_cert_t client_certificate_;
         std::string pinned_public_key_;
-        ssl_cert_enum client_cert_type_{ssl_cert::PEM};
         http_method method_{http_method::GET};
         qparams_t qparams_;
         headers_t headers_;

@@ -1198,7 +1198,7 @@ TEST_CASE("proxy", "[!mayfail]") {
                     auto req = net::request_builder()
                             .url(url)
                             .method(net::http_method::GET)
-                            .proxy(proxy_address, "user", "password")
+                            .proxy({proxy_address, "user", "password"})
                             .verification(true)
                             .send();
 
@@ -1245,15 +1245,15 @@ SCENARIO("Public key authentication", "[!mayfail]")
 
             builder.url("https://client.badssl.com")
             .method(net::http_method::GET)
-            .client_certificate("./badssl.com-client.p12", net::ssl_cert::P12, "badssl.com")
+            .client_certificate({"./badssl.com-client.p12", net::ssl_cert::P12, "badssl.com"})
             // Depending on where curl is built, the location of certificates are different.
             // Ubuntu uses /etc/ssl/certs. On macOS no path is required since DarwinSSL uses the cert store.
             // As it is impossible to setup this test to work on all machines with TLS-chain verification,
             // verification must be disabled.
             .verification(false);
 
-            REQUIRE(builder.certificate_password() == "badssl.com");
-            REQUIRE(std::string{builder.certificate_type()} == net::ssl_cert::P12.type());
+            REQUIRE(builder.client_certificate().password() == "badssl.com");
+            REQUIRE(std::string{builder.client_certificate().type()} == net::ssl_cert::P12.type());
 
             auto req = builder.send();
 
@@ -1277,7 +1277,7 @@ SCENARIO("Public key authentication", "[!mayfail]")
     }
 }
 
-SCENARIO("Allowing requests to be created in a context that goes of of scope")
+SCENARIO("Allowing requests to be created in a context that goes out of scope")
 {
     class Scope
     {
