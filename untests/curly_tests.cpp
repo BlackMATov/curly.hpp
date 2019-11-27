@@ -9,6 +9,10 @@
 #include <fstream>
 #include <utility>
 #include <iostream>
+#include <sys/stat.h>
+
+#include <string_view>
+using namespace std::literals;
 
 #include <rapidjson/document.h>
 namespace json = rapidjson;
@@ -93,6 +97,38 @@ namespace
                 }).send();
         });
     }
+
+    class file_downloader : public net::download_handler {
+    public:
+        file_downloader(const char* filename)
+                : stream_(filename, std::ofstream::binary) {}
+
+        std::size_t write(const char* src, std::size_t size) override {
+            stream_.write(src, size);
+            return size;
+        }
+    private:
+        std::ofstream stream_;
+    };
+
+    // S_ISREG is not defined on windows, this fixes it.
+    #if !defined(S_ISREG) && defined(S_IFMT) && defined(S_IFREG)
+    #define S_ISREG(m) (((m) & S_IFMT) == S_IFREG)
+    #endif
+
+    bool is_regular_file(const char* file)
+    {
+        struct stat st{};
+        stat(file, &st);
+        return S_ISREG(st.st_mode);
+    }
+
+    size_t file_size(const char* file)
+    {
+        struct stat st{};
+        stat(file, &st);
+        return st.st_size;
+    }
 }
 
 TEST_CASE("curly") {
@@ -106,14 +142,14 @@ TEST_CASE("curly") {
             REQUIRE(req.wait() == net::req_status::done);
             REQUIRE(req.status() == net::req_status::done);
             auto resp = req.take();
-            REQUIRE(resp.http_code() == 200u);
+            REQUIRE(resp.http_code() == net::response_code::OK);
             REQUIRE(req.status() == net::req_status::empty);
         }
         {
             auto req = net::request_builder("https://httpbin.org/delay/2").send();
             REQUIRE(req.wait_for(net::time_sec_t(1)) == net::req_status::pending);
             REQUIRE(req.wait_for(net::time_sec_t(5)) == net::req_status::done);
-            REQUIRE(req.take().http_code() == 200u);
+            REQUIRE(req.take().http_code() == net::response_code::OK);
         }
         {
             auto req = net::request_builder("https://httpbin.org/delay/2").send();
@@ -121,7 +157,7 @@ TEST_CASE("curly") {
                 == net::req_status::pending);
             REQUIRE(req.wait_until(net::time_point_t::clock::now() + net::time_sec_t(5))
                 == net::req_status::done);
-            REQUIRE(req.take().http_code() == 200u);
+            REQUIRE(req.take().http_code() == net::response_code::OK);
         }
     }
 
@@ -178,7 +214,7 @@ TEST_CASE("curly") {
             auto req = net::request_builder("https://httpbin.org/status/204").send();
             auto resp = req.take();
             REQUIRE(req.status() == net::req_status::empty);
-            REQUIRE(resp.http_code() == 204u);
+            REQUIRE(resp.http_code() == net::response_code::No_Content);
             REQUIRE(resp.last_url() == "https://httpbin.org/status/204");
         }
         {
@@ -203,111 +239,111 @@ TEST_CASE("curly") {
                 .url("https://httpbin.org/put")
                 .method(net::http_method::PUT)
                 .send();
-            REQUIRE(req0.take().http_code() == 200u);
+            REQUIRE(req0.take().http_code() == net::response_code::OK);
 
             auto req1 = net::request_builder()
                 .url("https://httpbin.org/put")
                 .method(net::http_method::GET)
                 .send();
-            REQUIRE(req1.take().http_code() == 405u);
+            REQUIRE(req1.take().http_code() == net::response_code::Method_Not_Allowed);
 
             auto req2 = net::request_builder()
                 .url("https://httpbin.org/put")
                 .method(net::http_method::HEAD)
                 .send();
-            REQUIRE(req2.take().http_code() == 405u);
+            REQUIRE(req2.take().http_code() == net::response_code::Method_Not_Allowed);
 
             auto req3 = net::request_builder()
                 .url("https://httpbin.org/put")
                 .method(net::http_method::POST)
                 .send();
-            REQUIRE(req3.take().http_code() == 405u);
+            REQUIRE(req3.take().http_code() == net::response_code::Method_Not_Allowed);
 
             auto req4 = net::request_builder()
                 .url("https://httpbin.org/put")
                 .method(net::http_method::PATCH)
                 .send();
-            REQUIRE(req4.take().http_code() == 405u);
+            REQUIRE(req4.take().http_code() == net::response_code::Method_Not_Allowed);
 
             auto req5 = net::request_builder()
                 .url("https://httpbin.org/put")
                 .method(net::http_method::DEL)
                 .send();
-            REQUIRE(req5.take().http_code() == 405u);
+            REQUIRE(req5.take().http_code() == net::response_code::Method_Not_Allowed);
         }
         {
             auto req0 = net::request_builder()
                 .url("https://httpbin.org/get")
                 .method(net::http_method::PUT)
                 .send();
-            REQUIRE(req0.take().http_code() == 405u);
+            REQUIRE(req0.take().http_code() == net::response_code::Method_Not_Allowed);
 
             auto req1 = net::request_builder()
                 .url("https://httpbin.org/get")
                 .method(net::http_method::GET)
                 .send();
-            REQUIRE(req1.take().http_code() == 200u);
+            REQUIRE(req1.take().http_code() == net::response_code::OK);
 
             auto req2 = net::request_builder()
                 .url("https://httpbin.org/get")
                 .method(net::http_method::HEAD)
                 .send();
-            REQUIRE(req2.take().http_code() == 200u);
+            REQUIRE(req2.take().http_code() == net::response_code::OK);
 
             auto req3 = net::request_builder()
                 .url("https://httpbin.org/get")
                 .method(net::http_method::POST)
                 .send();
-            REQUIRE(req3.take().http_code() == 405u);
+            REQUIRE(req3.take().http_code() == net::response_code::Method_Not_Allowed);
 
             auto req4 = net::request_builder()
                 .url("https://httpbin.org/get")
                 .method(net::http_method::PATCH)
                 .send();
-            REQUIRE(req4.take().http_code() == 405u);
+            REQUIRE(req4.take().http_code() == net::response_code::Method_Not_Allowed);
 
             auto req5 = net::request_builder()
                 .url("https://httpbin.org/get")
                 .method(net::http_method::DEL)
                 .send();
-            REQUIRE(req5.take().http_code() == 405u);
+            REQUIRE(req5.take().http_code() == net::response_code::Method_Not_Allowed);
         }
         {
             auto req0 = net::request_builder()
                 .url("https://httpbin.org/post")
                 .method(net::http_method::PUT)
                 .send();
-            REQUIRE(req0.take().http_code() == 405u);
+            REQUIRE(req0.take().http_code() == net::response_code::Method_Not_Allowed);
 
             auto req1 = net::request_builder()
                 .url("https://httpbin.org/post")
                 .method(net::http_method::GET)
                 .send();
-            REQUIRE(req1.take().http_code() == 405u);
+            REQUIRE(req1.take().http_code() == net::response_code::Method_Not_Allowed);
 
             auto req2 = net::request_builder()
                 .url("https://httpbin.org/post")
                 .method(net::http_method::HEAD)
                 .send();
-            REQUIRE(req2.take().http_code() == 405u);
+            REQUIRE(req2.take().http_code() == net::response_code::Method_Not_Allowed);
 
             auto req3 = net::request_builder()
                 .url("https://httpbin.org/post")
                 .method(net::http_method::POST)
                 .send();
-            REQUIRE(req3.take().http_code() == 200u);
+            REQUIRE(req3.take().http_code() == net::response_code::OK);
 
             auto req4 = net::request_builder()
                 .url("https://httpbin.org/post")
                 .method(net::http_method::PATCH)
                 .send();
-            REQUIRE(req4.take().http_code() == 405u);
+            REQUIRE(req4.take().http_code() == net::response_code::Method_Not_Allowed);
 
             auto req5 = net::request_builder()
                 .url("https://httpbin.org/post")
                 .method(net::http_method::DEL)
                 .send();
-            REQUIRE(req5.take().http_code() == 405u);
+            REQUIRE(req5.take().http_code() == net::response_code::Method_Not_Allowed);
         }
         {
             auto req1 = net::request_builder()
@@ -332,42 +368,42 @@ TEST_CASE("curly") {
                 .url("https://httpbin.org/status/200")
                 .method(net::http_method::PUT)
                 .send();
-            REQUIRE(req.take().http_code() == 200u);
+            REQUIRE(req.take().http_code() == net::response_code::OK);
         }
         {
             auto req = net::request_builder()
                 .url("https://httpbin.org/status/201")
                 .method(net::http_method::GET)
                 .send();
-            REQUIRE(req.take().http_code() == 201u);
+            REQUIRE(req.take().http_code() == net::response_code::Created);
         }
         {
             auto req = net::request_builder()
                 .url("https://httpbin.org/status/202")
                 .method(net::http_method::HEAD)
                 .send();
-            REQUIRE(req.take().http_code() == 202u);
+            REQUIRE(req.take().http_code() == net::response_code::Accepted);
         }
         {
             auto req = net::request_builder()
                 .url("https://httpbin.org/status/203")
                 .method(net::http_method::POST)
                 .send();
-            REQUIRE(req.take().http_code() == 203u);
+            REQUIRE(req.take().http_code() == net::response_code::Non_authoritativeInformation);
         }
         {
             auto req = net::request_builder()
                 .url("https://httpbin.org/status/203")
                 .method(net::http_method::PATCH)
                 .send();
-            REQUIRE(req.take().http_code() == 203u);
+            REQUIRE(req.take().http_code() == net::response_code::Non_authoritativeInformation);
         }
         {
             auto req = net::request_builder()
                 .url("https://httpbin.org/status/203")
                 .method(net::http_method::DEL)
                 .send();
-            REQUIRE(req.take().http_code() == 203u);
+            REQUIRE(req.take().http_code() == net::response_code::Non_authoritativeInformation);
         }
     }
 
@@ -539,7 +575,7 @@ TEST_CASE("curly") {
                 .url("https://httpbin.org/bytes/5")
                 .method(net::http_method::GET)
                 .send().take();
-            REQUIRE(resp.http_code() == 200u);
+            REQUIRE(resp.http_code() == net::response_code::OK);
             REQUIRE(resp.content.size() == 5u);
             REQUIRE(resp.headers.count("Content-Type"));
             REQUIRE(resp.headers.count("Content-Length"));
@@ -551,7 +587,7 @@ TEST_CASE("curly") {
                 .url("http://httpbin.org/drip?duration=2&numbytes=5&code=200&delay=1")
                 .method(net::http_method::GET)
                 .send().take();
-            REQUIRE(resp.http_code() == 200u);
+            REQUIRE(resp.http_code() == net::response_code::OK);
             REQUIRE(resp.content.size() == 5u);
             REQUIRE(resp.headers.count("Content-Type"));
             REQUIRE(resp.headers.count("Content-Length"));
@@ -572,7 +608,7 @@ TEST_CASE("curly") {
                 .url("http://httpbin.org/base64/SFRUUEJJTiBpcyBhd2Vzb21l")
                 .method(net::http_method::GET)
                 .send().take();
-            REQUIRE(resp.http_code() == 200u);
+            REQUIRE(resp.http_code() == net::response_code::OK);
             REQUIRE(resp.content.as_string_view() == "HTTPBIN is awesome");
             REQUIRE(resp.headers.count("Content-Type"));
             REQUIRE(resp.headers.count("Content-Length"));
@@ -584,7 +620,7 @@ TEST_CASE("curly") {
                 .url("https://httpbin.org/image/png")
                 .method(net::http_method::HEAD)
                 .send().take();
-            REQUIRE(resp.http_code() == 200u);
+            REQUIRE(resp.http_code() == net::response_code::OK);
             REQUIRE(resp.headers.count("Content-Type"));
             REQUIRE(resp.headers.count("Content-Length"));
             REQUIRE(resp.headers.at("Content-Type") == "image/png");
@@ -596,7 +632,7 @@ TEST_CASE("curly") {
                 .url("https://httpbin.org/image/png")
                 .method(net::http_method::GET)
                 .send().take();
-            REQUIRE(resp.http_code() == 200u);
+            REQUIRE(resp.http_code() == net::response_code::OK);
             REQUIRE(resp.headers.count("Content-Type"));
             REQUIRE(resp.headers.count("Content-Length"));
             REQUIRE(resp.headers.at("Content-Type") == "image/png");
@@ -611,7 +647,7 @@ TEST_CASE("curly") {
                 .url("https://httpbin.org/image/jpeg")
                 .method(net::http_method::HEAD)
                 .send().take();
-            REQUIRE(resp.http_code() == 200u);
+            REQUIRE(resp.http_code() == net::response_code::OK);
             REQUIRE(resp.headers.count("Content-Type"));
             REQUIRE(resp.headers.count("Content-Length"));
             REQUIRE(resp.headers.at("Content-Type") == "image/jpeg");
@@ -623,7 +659,7 @@ TEST_CASE("curly") {
                 .url("https://httpbin.org/image/jpeg")
                 .method(net::http_method::GET)
                 .send().take();
-            REQUIRE(resp.http_code() == 200u);
+            REQUIRE(resp.http_code() == net::response_code::OK);
             REQUIRE(resp.headers.count("Content-Type"));
             REQUIRE(resp.headers.count("Content-Length"));
             REQUIRE(resp.headers.at("Content-Type") == "image/jpeg");
@@ -642,21 +678,21 @@ TEST_CASE("curly") {
                     .url("https://httpbin.org/redirect/2")
                     .method(net::http_method::GET)
                     .send();
-                REQUIRE(req.take().http_code() == 200u);
+                REQUIRE(req.take().http_code() == net::response_code::OK);
             }
             {
                 auto req = net::request_builder()
                     .url("https://httpbin.org/absolute-redirect/2")
                     .method(net::http_method::GET)
                     .send();
-                REQUIRE(req.take().http_code() == 200u);
+                REQUIRE(req.take().http_code() == net::response_code::OK);
             }
             {
                 auto req = net::request_builder()
                     .url("https://httpbin.org/relative-redirect/2")
                     .method(net::http_method::GET)
                     .send();
-                REQUIRE(req.take().http_code() == 200u);
+                REQUIRE(req.take().http_code() == net::response_code::OK);
             }
         }
         {
@@ -666,7 +702,7 @@ TEST_CASE("curly") {
                     .method(net::http_method::GET)
                     .redirections(0)
                     .send();
-                REQUIRE(req.take().http_code() == 302u);
+                REQUIRE(req.take().http_code() == net::response_code::Found);
             }
             {
                 auto req = net::request_builder()
@@ -690,7 +726,7 @@ TEST_CASE("curly") {
                     .method(net::http_method::GET)
                     .redirections(3)
                     .send();
-                REQUIRE(req.take().http_code() == 200u);
+                REQUIRE(req.take().http_code() == net::response_code::OK);
             }
         }
     }
@@ -749,43 +785,17 @@ TEST_CASE("curly") {
         }
     }
 
-    SECTION("proxy") {
-        auto get_resp = net::request_builder("https://httpbin.org/get")
-            .send()
-            .take();
-        REQUIRE(get_resp.http_code() == 200u);
-        const auto cont_j = json_parse(get_resp.content.as_string_view());
-        const std::string my_origin = cont_j["origin"].GetString();
+    SECTION("escaped request body")
+    {
+        auto resp = net::request_builder()
+                .url("https://httpbin.org/anything")
+                .method(net::http_method::POST)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .content(curly_hpp::qparams_t{{{"data", "%&="}}} )
+                .send().take();
 
-        bool success = false;
-
-        for ( std::size_t i = 0; i < 5 && !success; ++i ) {
-            auto proxy_resp = net::request_builder()
-                .url("http://pubproxy.com/api/proxy?format=json&type=http&last_check=60&speed=20&limit=5")
-                .send()
-                .take();
-            REQUIRE(proxy_resp.http_code() == 200u);
-
-            const auto proxy_cont_j = json_parse(proxy_resp.content.as_string_view());
-            const auto& proxy_list = proxy_cont_j["data"];
-
-            for ( std::size_t i = 0; i < proxy_list.Size() && !success; ++i ) {
-                auto proxy_address = std::string("http://") + proxy_list[i]["ipPort"].GetString();
-                auto req = net::request_builder("https://httpbin.org/get")
-                    .proxy(net::proxy_t(proxy_address))
-                    .send();
-                if ( req.wait() == net::req_status::done ) {
-                    auto resp = req.take();
-                    if ( resp.http_code() == 200u ) {
-                        const std::string proxy_ip = proxy_list[i]["ip"].GetString();
-                        const auto cont_j = json_parse(resp.content.as_string_view());
-                        success = my_origin != cont_j["origin"].GetString();
-                    }
-                }
-            }
-        }
-
-        REQUIRE(success);
+        const auto content_j = json_parse(resp.content.as_string_view());
+        REQUIRE(content_j["form"]["data"] == "%&=");
     }
 
     SECTION("ssl_verification") {
@@ -877,7 +887,7 @@ TEST_CASE("curly") {
                     ++call_once;
                     REQUIRE(request.is_done());
                     REQUIRE(request.status() == net::req_status::done);
-                    REQUIRE(request.take().http_code() == 200u);
+                    REQUIRE(request.take().http_code() == net::response_code::OK);
                 }).send();
             REQUIRE(req.wait_callback() == net::req_status::empty);
             REQUIRE_FALSE(req.get_callback_exception());
@@ -1061,24 +1071,12 @@ TEST_CASE("curly_examples") {
 
     SECTION("Streamed Requests") {
         {
-            class file_dowloader : public net::download_handler {
-            public:
-                file_dowloader(const char* filename)
-                : stream_(filename, std::ofstream::binary) {}
-
-                std::size_t write(const char* src, std::size_t size) override {
-                    stream_.write(src, size);
-                    return size;
-                }
-            private:
-                std::ofstream stream_;
-            };
-
             net::request_builder()
                 .url("https://httpbin.org/image/jpeg")
-                .downloader<file_dowloader>("image.jpeg")
+                .downloader<file_downloader>("image.jpeg")
                 .send().take();
         }
+
         {
             class file_uploader : public net::upload_handler {
             public:
@@ -1124,5 +1122,363 @@ TEST_CASE("curly_examples") {
 
         promise.wait();
         // 8090 bytes downloaded
+    }
+}
+
+TEST_CASE("proxy", "[!mayfail]") {
+    net::performer performer;
+
+    {
+        try {
+            auto ipinfo_req = net::request_builder()
+                    .method(net::http_method::GET)
+                    .url("https://api.ipify.org?format=json")
+                    .send();
+
+            // synchronous waits and get a response
+            const char* default_ip = R"({"ip":"0.0.0.0"})";
+            json::Document ipinfo;
+            ipinfo.Parse(default_ip);
+            try {
+                auto ipinfo_resp = ipinfo_req.take();
+                ipinfo = json_parse(ipinfo_resp.content.as_string_view());
+                REQUIRE(ipinfo_resp.http_code() == net::response_code::OK);
+            }
+            catch (net::exception& e)
+            {
+                const auto& error = ipinfo_req.get_error();
+                FAIL("Request failed with: " + error);
+            }
+
+            SECTION("Without proxy")
+            {
+                auto url = std::string("https://proxycheck.io/v2/") + ipinfo["ip"].GetString();
+                auto req = net::request_builder()
+                        .url(url)
+                        .method(net::http_method::GET)
+                        .verification(true)
+                        .send();
+                try {
+                    const auto resp = req.take();
+                    const auto resp_content = json_parse(resp.content.as_string_view());
+
+                    REQUIRE(resp.http_code() == net::response_code::OK);
+                    REQUIRE(resp_content[ipinfo["ip"].GetString()]["proxy"] == "no");
+                }
+                catch (net::exception& e)
+                {
+                    const auto& error = req.get_error();
+                    FAIL("Request failed with: " + error);
+                }
+            }
+            SECTION("With proxy")
+            {
+                auto proxy_req = net::request_builder()
+                        .url("http://pubproxy.com/api/proxy?format=json&type=http&speed=15&limit=5")
+                        .method(net::http_method::GET)
+                        .send();
+                auto proxy_resp = proxy_req.take();
+                REQUIRE(proxy_resp.http_code() == net::response_code::OK);
+
+                // Try each proxy until we succeed.
+                auto proxy_content = json_parse(proxy_resp.content.as_string_view());
+
+                auto& data = proxy_content["data"];
+
+                auto success = false;
+                auto i = -1;
+
+                while(!success && ++i < 5)
+                {
+                    const auto& proxy = data[i];
+                    auto proxy_address = std::string("http://") + proxy["ipPort"].GetString();
+                    std::cout << "Trying proxy: " << proxy_address;
+
+                    auto url = std::string("https://proxycheck.io/v2/") + ipinfo["ip"].GetString();
+                    auto req = net::request_builder()
+                            .url(url)
+                            .method(net::http_method::GET)
+                            .proxy({proxy_address, "user", "password"})
+                            .verification(true)
+                            .send();
+
+                    try
+                    {
+                        const auto resp = req.take();
+                        const auto resp_content = json_parse(resp.content.as_string_view());
+                        success = resp.http_code() == net::response_code::OK && resp_content["status"] == "denied";
+                    }
+                    catch (net::exception& e)
+                    {
+                        const auto& error = req.get_error();
+                        std::cout << "Request using proxy " << proxy_address << " failed with: " << error;
+                    }
+                }
+
+                REQUIRE(success);
+            }
+        }
+        catch (net::exception& e)
+        {
+            std::cout << "exception: " << e.what();
+            FAIL(e.what());
+        }
+    }
+}
+
+
+// This test will fail on macOS and windows as the ssl backend requires the client-certificate to be installed in the keychain
+SCENARIO("Public key authentication", "[!mayfail]")
+{
+    net::performer performer;
+    WHEN("Downloading P12 client cert")
+    {
+        try
+        {
+            net::request_builder()
+                    .url("https://badssl.com/certs/badssl.com-client.p12")
+                    .downloader<file_downloader>("./badssl.com-client.p12")
+                    .send()
+                    .take();
+
+            auto builder = net::request_builder();
+
+            builder.url("https://client.badssl.com")
+            .method(net::http_method::GET)
+            .client_certificate({"./badssl.com-client.p12", net::ssl_cert::P12, "badssl.com"})
+            // Depending on where curl is built, the location of certificates are different.
+            // Ubuntu uses /etc/ssl/certs. On macOS no path is required since DarwinSSL uses the cert store.
+            // As it is impossible to setup this test to work on all machines with TLS-chain verification,
+            // verification must be disabled.
+            .verification(false);
+
+            REQUIRE(builder.client_certificate().password() == "badssl.com");
+            REQUIRE(std::string{builder.client_certificate().type()} == net::ssl_cert::P12.type());
+
+            auto req = builder.send();
+
+            try
+            {
+                auto resp = req.take();
+                REQUIRE(resp.http_code() == net::response_code::OK);
+            }
+            catch (net::exception& e)
+            {
+#if defined(__linux__)
+                const auto& error = req.get_error();
+                FAIL("Request failed with: " + error);
+#endif
+            }
+        }
+        catch(curly_hpp::exception& ex)
+        {
+            FAIL(ex.what());
+        }
+    }
+}
+
+SCENARIO("Allowing requests to be created in a context that goes out of scope")
+{
+    class Scope
+    {
+        public:
+            explicit Scope(std::string url)
+            : url(std::move(url)), request()
+            {
+            }
+
+            void send()
+            {
+                request = curly_hpp::request_builder().url(url).send();
+            }
+
+            curly_hpp::response_code get_result()
+            {
+                auto response = request.take();
+                return response.http_code();
+            }
+        private:
+            curly_hpp::performer performer{};
+            std::string url;
+            curly_hpp::request request;
+    };
+
+    GIVEN("A helper class for curly that has the request as a member")
+    {
+        Scope scope("https://httpbin.org/delay/1");
+        THEN("We initiate the request from a method")
+        {
+            scope.send();
+            REQUIRE(scope.get_result() == net::response_code::OK);
+        }
+    }
+}
+
+SCENARIO("Translating response codes")
+{
+    REQUIRE("OK" == net::as_string(net::response_code::OK));
+    REQUIRE("Invalid response code" == net::as_string(static_cast<net::response_code>(9999)));
+}
+
+SCENARIO("Escaped content")
+{
+    net::performer performer{};
+
+    net::qparams_t params{};
+    const auto content_1 =  R"!!(%&/()= )!!"sv;
+    const auto content_2 = R"!!(!"#¤%&/()=? )!!"sv;
+
+    params.emplace("1",content_1 );
+    params.emplace("2", content_2);
+
+    auto resp = net::request_builder(net::http_method::POST)
+            .url("http://httpbin.org/anything")
+            .header("accept", "application/json")
+            .content(params)
+            .send().take();
+
+    REQUIRE(resp.http_code() == net::response_code::OK);
+
+    auto data = json_parse(resp.content.as_string_view());
+
+    REQUIRE(data["form"]["1"].GetString() == content_1);
+    REQUIRE(data["form"]["2"].GetString() == content_2);
+}
+
+SCENARIO("Resume download")
+{
+    const char* url = "https://cdimage.debian.org/debian-cd/current/amd64/iso-dvd/SHA256SUMS";
+    const char* local_file = "test-file";
+    net::performer performer{};
+
+    try
+    {
+        if (is_regular_file(local_file))
+        {
+            remove(local_file);
+        }
+
+        {
+            // First download the entire file
+            auto resp = net::request_builder()
+                    .url(url)
+                    .downloader<file_downloader>(local_file)
+                    .send().take();
+
+            REQUIRE(resp.http_code() == net::response_code::OK);
+        }
+
+        // Get file size
+        auto size = file_size(local_file);
+        REQUIRE(size > 0);
+        remove(local_file);
+
+        // Now download a part of it
+        const auto offset = size - size / 2;
+        const auto expected_size = size - offset;
+
+        {
+            auto resp = net::request_builder()
+                    .url(url)
+                    .downloader<file_downloader>(local_file)
+                    .resume_offset(offset)
+                    .send().take();
+
+            REQUIRE(resp.http_code() == net::response_code::Partial_Content);
+        }
+        REQUIRE(file_size(local_file) == expected_size);
+    }
+    catch(std::exception& ex)
+    {
+        FAIL(ex.what());
+    }
+
+    // Always cleanup downloaded file
+    if (is_regular_file(local_file))
+    {
+        remove(local_file);
+    }
+}
+
+SCENARIO("Custom CABundle")
+{
+    const char *url = "https://curl.haxx.se/ca/cacert.pem";
+    const char *local_file = "cacert.pem";
+    net::performer performer{};
+
+    try
+    {
+        WHEN("Non-existing cabundle")
+        {
+            auto req = net::request_builder("https://sha256.badssl.com")
+                    .method(net::http_method::HEAD)
+                    .verification(true, std::nullopt, local_file)
+                    .send();
+            REQUIRE(req.wait() == net::req_status::failed);
+        }
+
+        WHEN("Existing ca-bundle")
+        {
+            if (is_regular_file(local_file))
+            {
+                remove(local_file);
+            }
+            {
+                // First download the entire file
+                auto resp = net::request_builder()
+                        .url(url)
+                        .downloader<file_downloader>(local_file)
+                        .send().take();
+
+                REQUIRE(resp.http_code() == net::response_code::OK);
+            }
+            auto req = net::request_builder("https://sha256.badssl.com")
+                    .method(net::http_method::HEAD)
+                    .verification(true, std::nullopt, local_file)
+                    .send();
+            REQUIRE(req.wait() == net::req_status::done);
+        }
+    }
+    catch (std::exception &ex)
+    {
+        FAIL(ex.what());
+    }
+
+    // Always cleanup downloaded file
+    if (is_regular_file(local_file))
+    {
+        remove(local_file);
+    }
+}
+
+SCENARIO("Public key pinning")
+{
+    try
+    {
+        net::performer performer{};
+        constexpr const char* url = "https://httpbin.org/status/200";
+        WHEN("Using a mismatching public key signature")
+        {
+            auto req1 = net::request_builder(url)
+                    .method(net::http_method::GET)
+                    .verification(true)
+                    .pinned_public_key("sha256//9SLklscvzMYj8f+52lp5ze/hY0CFHyLSPQzSpYYIBm8=")
+                    .send();
+            REQUIRE(req1.get_error() == "Pinned pubkey mismatch");
+            REQUIRE(req1.status() == net::req_status::failed);
+        }
+        AND_WHEN("Using a matching public key signature")
+        {
+            auto req2 = net::request_builder(url)
+                    .method(net::http_method::GET)
+                    .verification(true)
+                    .pinned_public_key("sha256//Yvh6l+lXgqrBJrCtxwr9r/vbERE37/5/p6AaRRsiboQ=")
+                    .send();
+            REQUIRE(req2.take().http_code() == net::response_code::OK);
+        }
+    }
+    catch (std::exception &ex)
+    {
+        FAIL(ex.what());
     }
 }

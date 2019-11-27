@@ -10,6 +10,7 @@ project(curly.hpp)
 option(USE_STATIC_CRT "Use static C runtime library" OFF)
 option(USE_CONAN_CURL "Build with cURL from Conan" OFF)
 option(USE_SYSTEM_CURL "Build with cURL from system paths" OFF)
+option(BUILD_PIE "Build Position Independed Code" OFF)
 option(USE_EMBEDDED_CURL "Build with embedded cURL library" ON)
 
 #
@@ -100,6 +101,14 @@ if(USE_CONAN_CURL)
     target_link_libraries(${PROJECT_NAME} PUBLIC CONAN_PKG::libcurl)
 endif(USE_CONAN_CURL)
 
+if(UNIX AND NOT APPLE)
+    if(BUILD_PIE)
+        set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} -pie")
+    else()
+        set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} -no-pie")
+    endif(BUILD_PIE)
+endif()
+
 if(USE_SYSTEM_CURL)
     find_package(CURL REQUIRED)
     target_link_libraries(${PROJECT_NAME} PUBLIC CURL::libcurl)
@@ -110,7 +119,7 @@ if(USE_EMBEDDED_CURL)
     FetchContent_Declare(
         embedded_curl
         GIT_REPOSITORY https://github.com/curl/curl
-        GIT_TAG curl-7_66_0)
+        GIT_TAG curl-7_67_0)
 
     FetchContent_GetProperties(embedded_curl)
     if(NOT embedded_curl_POPULATED)

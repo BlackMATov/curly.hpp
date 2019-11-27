@@ -8,6 +8,7 @@
 
 #include <mutex>
 #include <queue>
+#include <sstream>
 #include <type_traits>
 #include <condition_variable>
 
@@ -20,6 +21,7 @@
 #endif
 
 #include <curl/curl.h>
+#include <iostream>
 
 // -----------------------------------------------------------------------------
 //
@@ -394,7 +396,9 @@ namespace curly_hpp
                 curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYPEER, 0l);
                 curl_easy_setopt(curlh_.get(), CURLOPT_SSL_VERIFYHOST, 0l);
             }
-
+            if (breq_.resume_offset()) {
+                curl_easy_setopt(curlh_.get(), CURLOPT_RESUME_FROM, breq_.resume_offset());
+            }
             if ( breq_.redirections() ) {
                 curl_easy_setopt(curlh_.get(), CURLOPT_FOLLOWLOCATION, 1l);
                 curl_easy_setopt(curlh_.get(), CURLOPT_MAXREDIRS,
@@ -405,6 +409,39 @@ namespace curly_hpp
 
             curl_easy_setopt(curlh_.get(), CURLOPT_TIMEOUT_MS,
                 static_cast<long>(std::max(time_ms_t(1), breq_.request_timeout()).count()));
+
+            if ( !breq_.proxy().proxy().empty() ) {
+                const auto& proxy = breq_.proxy();
+                curl_easy_setopt(curlh_.get(), CURLOPT_PROXY, proxy.proxy().c_str());
+                if ( !proxy.username().empty() ) {
+                    curl_easy_setopt(curlh_.get(), CURLOPT_PROXYUSERNAME, proxy.username().c_str());
+                }
+                if ( !proxy.password().empty() ) {
+                    curl_easy_setopt(curlh_.get(), CURLOPT_PROXYPASSWORD, proxy.password().c_str());
+                }
+                if ( !proxy.public_key().empty() ) {
+                    curl_easy_setopt(curlh_.get(), CURLOPT_PROXY_PINNEDPUBLICKEY, proxy.public_key().c_str());
+                }
+            }
+            if ( breq_.capath() ) {
+                curl_easy_setopt(curlh_.get(), CURLOPT_CAPATH, breq_.capath()->empty() ? nullptr : breq_.capath()->c_str());
+            }
+            if ( breq_.cabundle() ) {
+                curl_easy_setopt(curlh_.get(), CURLOPT_CAINFO, breq_.cabundle()->empty() ? nullptr : breq_.cabundle()->c_str());
+            }
+
+            if ( !breq_.client_certificate().certificate().empty() ) {
+                const auto& client_cert = breq_.client_certificate();
+                curl_easy_setopt(curlh_.get(), CURLOPT_SSLCERT, client_cert.certificate().c_str());
+                curl_easy_setopt(curlh_.get(), CURLOPT_SSLCERTTYPE, client_cert.type());
+                if ( !client_cert.password().empty() ) {
+                    curl_easy_setopt(curlh_.get(), CURLOPT_SSLCERTPASSWD, client_cert.password().c_str());
+                }
+            }
+
+            if ( !breq_.pinned_public_key().empty() ) {
+                curl_easy_setopt(curlh_.get(), CURLOPT_PINNEDPUBLICKEY, breq_.pinned_public_key().c_str());
+            }
 
             curl_easy_setopt(curlh_.get(), CURLOPT_CONNECTTIMEOUT_MS,
                 static_cast<long>(std::max(time_ms_t(1), breq_.connection_timeout()).count()));
@@ -443,6 +480,7 @@ namespace curly_hpp
         bool done() noexcept {
             std::lock_guard<std::mutex> guard(mutex_);
             if ( status_ != req_status::pending ) {
+                cvar_.notify_all();
                 return false;
             }
 
@@ -506,6 +544,10 @@ namespace curly_hpp
                 case CURLE_ABORTED_BY_CALLBACK:
                     status_ = req_status::cancelled;
                     error_.assign("Callback aborted");
+                    break;
+                case CURLE_SSL_PINNEDPUBKEYNOTMATCH:
+                    status_ = req_status::failed;
+                    error_.assign("Pinned pubkey mismatch");
                     break;
                 default:
                     status_ = req_status::failed;
@@ -861,6 +903,11 @@ namespace curly_hpp
         return *this;
     }
 
+    request_builder& request_builder::resume_offset(std::size_t offset) noexcept {
+        resume_offset_ = offset;
+        return *this;
+    }
+
     request_builder& request_builder::method(http_method m) noexcept {
         method_ = m;
         return *this;
@@ -895,8 +942,11 @@ namespace curly_hpp
         return *this;
     }
 
-    request_builder& request_builder::verification(bool v) noexcept {
+    request_builder& request_builder::verification(bool v, std::optional<std::string> capath,
+                                                   std::optional<std::string> cabundle) noexcept {
         verification_ = v;
+        capath_ = std::move(capath);
+        cabundle_ = std::move(cabundle);
         return *this;
     }
 
@@ -930,6 +980,26 @@ namespace curly_hpp
         return *this;
     }
 
+    request_builder& request_builder::content(const qparams_t& ps) {
+        std::stringstream ss;
+
+        for(const auto& pair : ps)
+        {
+            const auto& key = pair.first;
+            const auto value = pair.second;
+            if(!key.empty())
+            {
+                if(ss.tellp() > 0)
+                {
+                    ss << "&";
+                }
+                ss << make_escaped_string(key) << "=" << make_escaped_string(value);
+            }
+        }
+
+        return content(ss.str());
+    }
+
     request_builder& request_builder::callback(callback_t c) noexcept {
         callback_ = std::move(c);
         return *this;
@@ -950,8 +1020,30 @@ namespace curly_hpp
         return *this;
     }
 
+    request_builder& request_builder::client_certificate(client_cert_t cert) noexcept {
+        client_certificate_  = std::move(cert);
+        return *this;
+    }
+
+    request_builder& request_builder::pinned_public_key(std::string pubkey) noexcept {
+        pinned_public_key_ = std::move(pubkey);
+        return *this;
+    }
+
     const std::string& request_builder::url() const noexcept {
         return url_;
+    }
+
+    const std::size_t& request_builder::resume_offset() const noexcept {
+        return resume_offset_;
+    }
+
+    const client_cert_t& request_builder::client_certificate() const noexcept {
+        return client_certificate_;
+    }
+
+    const std::string& request_builder::pinned_public_key() const noexcept {
+        return pinned_public_key_;
     }
 
     const proxy_t& request_builder::proxy() const noexcept {
@@ -976,6 +1068,14 @@ namespace curly_hpp
 
     bool request_builder::verification() const noexcept {
         return verification_;
+    }
+
+    const std::optional<std::string>& request_builder::capath() const noexcept {
+        return capath_;
+    }
+
+    const std::optional<std::string>& request_builder::cabundle() const noexcept {
+        return cabundle_;
     }
 
     std::uint32_t request_builder::redirections() const noexcept {

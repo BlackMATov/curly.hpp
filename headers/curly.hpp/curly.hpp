@@ -22,11 +22,13 @@
 #include <algorithm>
 #include <stdexcept>
 #include <functional>
+#include <optional>
 
 #include <map>
 #include <vector>
 #include <string>
 #include <initializer_list>
+#include "response_code.h"
 
 namespace curly_hpp
 {
@@ -143,48 +145,153 @@ namespace curly_hpp
         proxy_t(const proxy_t&) = default;
         proxy_t& operator=(const proxy_t&) = default;
 
-        proxy_t(std::string proxy)
-        : proxy_(std::move(proxy)) {}
+        proxy_t(std::string url) : proxy_(std::move(url))
+        {}
 
-        proxy_t(std::string proxy, std::string username)
-        : proxy_(std::move(proxy))
-        , username_(std::move(username)) {}
+        proxy_t(std::string url, std::string username) :
+            proxy_(std::move(url)),
+            username_(std::move(username))
+        {}
 
-        proxy_t(std::string proxy, std::string username, std::string password)
-        : proxy_(std::move(proxy))
-        , username_(std::move(username))
-        , password_(std::move(password)) {}
+        proxy_t(std::string url, std::string username, std::string password) :
+            proxy_(std::move(url)),
+            username_(std::move(username)),
+            password_(std::move(password))
+        {}
 
-        proxy_t& proxy(std::string v) {
-            proxy_ = std::move(v);
+        proxy_t(std::string url, std::string username, std::string password, std::string public_key) :
+                proxy_(std::move(url)),
+                username_(std::move(username)),
+                password_(std::move(password)),
+                public_key_(std::move(public_key))
+        {}
+
+        proxy_t& proxy(std::string url)
+        {
+            proxy_ = std::move(url);
             return *this;
         }
 
-        proxy_t& username(std::string v) {
-            username_ = std::move(v);
+        proxy_t& username(std::string username)
+        {
+            username_ = std::move(username);
             return *this;
         }
 
-        proxy_t& password(std::string v) {
-            password_ = std::move(v);
+        proxy_t& password(std::string password)
+        {
+            password_ = std::move(password);
             return *this;
         }
 
-        const std::string& proxy() const noexcept {
+        proxy_t& public_key(std::string pubkey)
+        {
+            public_key_ = std::move(pubkey);
+            return *this;
+        }
+
+        [[nodiscard]] const std::string& proxy() const noexcept
+        {
             return proxy_;
         }
 
-        const std::string& username() const noexcept {
+        [[nodiscard]] const std::string& username() const noexcept
+        {
             return username_;
         }
 
-        const std::string& password() const noexcept {
+        [[nodiscard]] const std::string& password() const noexcept
+        {
             return password_;
         }
+
+        [[nodiscard]] const std::string& public_key() const noexcept
+        {
+            return public_key_;
+        }
+
     private:
-        std::string proxy_;
-        std::string username_;
-        std::string password_;
+        std::string proxy_{};
+        std::string username_{};
+        std::string password_{};
+        std::string public_key_{};
+    };
+}
+
+namespace curly_hpp
+{
+    class ssl_cert_enum {
+    public:
+        constexpr explicit ssl_cert_enum(const char *name) : name(name) {}
+        [[nodiscard]] const char *type() const { return name; }
+    private:
+        ssl_cert_enum() : name("") {}
+        const char *name;
+    };
+
+    namespace ssl_cert {
+        constexpr ssl_cert_enum PEM("PEM");
+        constexpr ssl_cert_enum DER("DER");
+        constexpr ssl_cert_enum P12("P12");
+    }
+
+    class client_cert_t final
+    {
+    public:
+        client_cert_t() = default;
+
+        client_cert_t(client_cert_t&&) = default;
+        client_cert_t& operator=(client_cert_t&&) = default;
+
+        client_cert_t(const client_cert_t&) = default;
+        client_cert_t& operator=(const client_cert_t&) = default;
+
+        client_cert_t(std::string client_certificate) : certificate_(std::move(client_certificate))
+        {}
+
+        client_cert_t(std::string certificate, ssl_cert_enum type, std::string password)
+        : certificate_(std::move(certificate)),
+          type_(type),
+          password_(std::move(password))
+        {}
+
+        client_cert_t& certificate(std::string certificate)
+        {
+            certificate_ = std::move(certificate);
+            return *this;
+        }
+
+        client_cert_t& password(std::string password)
+        {
+            password_ = std::move(password);
+            return *this;
+        }
+
+        client_cert_t& type(ssl_cert_enum type)
+        {
+            type_ = type;
+            return *this;
+        }
+
+        [[nodiscard]] const std::string& certificate() const noexcept
+        {
+            return certificate_;
+        }
+
+        [[nodiscard]] const std::string& password() const noexcept
+        {
+            return password_;
+        }
+
+        [[nodiscard]] const char* type() const noexcept
+        {
+            return type_.type();
+        }
+
+    private:
+        std::string certificate_{};
+        ssl_cert_enum type_{ssl_cert::PEM};
+        std::string password_{};
     };
 }
 
@@ -254,8 +361,8 @@ namespace curly_hpp
             return last_url_;
         }
 
-        http_code_t http_code() const noexcept {
-            return http_code_;
+        [[nodiscard]] response_code http_code() const noexcept {
+            return static_cast<response_code>(http_code_);
         }
     public:
         content_t content;
@@ -285,6 +392,8 @@ namespace curly_hpp
         class internal_state;
         using internal_state_ptr = std::shared_ptr<internal_state>;
     public:
+        request() = default;
+
         request(internal_state_ptr);
 
         request(request&&) = default;
@@ -312,7 +421,7 @@ namespace curly_hpp
         const std::string& get_error() const noexcept;
         std::exception_ptr get_callback_exception() const noexcept;
     private:
-        internal_state_ptr state_;
+        internal_state_ptr state_{};
     };
 }
 
@@ -334,6 +443,8 @@ namespace curly_hpp
 
         request_builder& url(std::string u) noexcept;
         request_builder& proxy(proxy_t p) noexcept;
+        request_builder& client_certificate(client_cert_t cert) noexcept;
+        request_builder& pinned_public_key(std::string pubkey) noexcept;
         request_builder& method(http_method m) noexcept;
 
         request_builder& qparams(qparam_ilist_t ps);
@@ -343,7 +454,8 @@ namespace curly_hpp
         request_builder& header(std::string k, std::string v);
 
         request_builder& verbose(bool v) noexcept;
-        request_builder& verification(bool v) noexcept;
+        request_builder& verification(bool v, std::optional<std::string> capath = std::nullopt,
+                                    std::optional<std::string> cabundle = std::nullopt) noexcept;
         request_builder& redirections(std::uint32_t r) noexcept;
         request_builder& request_timeout(time_ms_t t) noexcept;
         request_builder& response_timeout(time_ms_t t) noexcept;
@@ -351,23 +463,31 @@ namespace curly_hpp
 
         request_builder& content(std::string_view b);
         request_builder& content(content_t b) noexcept;
+        request_builder& content(const qparams_t& ps);
         request_builder& callback(callback_t c) noexcept;
         request_builder& uploader(uploader_uptr u) noexcept;
         request_builder& downloader(downloader_uptr d) noexcept;
+        request_builder& resume_offset(std::size_t offset) noexcept;
+
         request_builder& progressor(progressor_uptr p) noexcept;
 
-        const std::string& url() const noexcept;
-        const proxy_t& proxy() const noexcept;
-        http_method method() const noexcept;
-        const qparams_t& qparams() const noexcept;
-        const headers_t& headers() const noexcept;
+        [[nodiscard]] const std::string& url() const noexcept;
+        [[nodiscard]] const proxy_t& proxy() const noexcept;
+        [[nodiscard]] http_method method() const noexcept;
+        [[nodiscard]] const std::size_t& resume_offset() const noexcept;
+        [[nodiscard]] const qparams_t& qparams() const noexcept;
+        [[nodiscard]] const headers_t& headers() const noexcept;
+        [[nodiscard]] const client_cert_t& client_certificate() const noexcept;
+        [[nodiscard]] const std::string& pinned_public_key() const noexcept;
 
-        bool verbose() const noexcept;
-        bool verification() const noexcept;
-        std::uint32_t redirections() const noexcept;
-        time_ms_t request_timeout() const noexcept;
-        time_ms_t response_timeout() const noexcept;
-        time_ms_t connection_timeout() const noexcept;
+        [[nodiscard]] bool verbose() const noexcept;
+        [[nodiscard]] bool verification() const noexcept;
+        [[nodiscard]] const std::optional<std::string>& capath() const noexcept;
+        [[nodiscard]] const std::optional<std::string>& cabundle() const noexcept;
+        [[nodiscard]] std::uint32_t redirections() const noexcept;
+        [[nodiscard]] time_ms_t request_timeout() const noexcept;
+        [[nodiscard]] time_ms_t response_timeout() const noexcept;
+        [[nodiscard]] time_ms_t connection_timeout() const noexcept;
 
         content_t& content() noexcept;
         const content_t& content() const noexcept;
@@ -436,8 +556,14 @@ namespace curly_hpp
             return progressor(std::make_unique<Progressor>(std::forward<Args>(args)...));
         }
     private:
-        std::string url_;
-        proxy_t proxy_;
+        std::string url_{};
+        proxy_t proxy_{};
+        client_cert_t client_certificate_{};
+        std::size_t resume_offset_{};
+
+        std::optional<std::string> capath_;
+        std::optional<std::string> cabundle_;
+        std::string pinned_public_key_{};
         http_method method_{http_method::GET};
         qparams_t qparams_;
         headers_t headers_;
@@ -453,6 +579,7 @@ namespace curly_hpp
         uploader_uptr uploader_;
         downloader_uptr downloader_;
         progressor_uptr progressor_;
+
     };
 }
 
