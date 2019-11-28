@@ -88,8 +88,8 @@ namespace
             std::size_t dnow, std::size_t dtotal,
             std::size_t unow, std::size_t utotal) override
         {
-            const double now_d = static_cast<double>(dnow + unow);
-            const double total_d = static_cast<double>(dtotal + utotal);
+            const auto now_d = static_cast<double>(dnow + unow);
+            const auto total_d = static_cast<double>(dtotal + utotal);
             const float progress_d = total_d > 0.0
                 ? static_cast<float>(now_d / total_d)
                 : 0.f;
@@ -206,9 +206,9 @@ namespace
     std::string make_escaped_url(std::string_view u, const qparams_t& ps) {
         std::string result{u};
         bool has_qparams = result.find('?') != std::string_view::npos;
-        for ( auto iter = ps.begin(); iter != ps.end(); ++iter ) {
-            const std::string k = !iter->first.empty() ? iter->first : iter->second;
-            const std::string v = !iter->first.empty() ? iter->second : std::string();
+        for (const auto& p : ps) {
+            const std::string k = !p.first.empty() ? p.first : p.second;
+            const std::string v = !p.first.empty() ? p.second : std::string();
             if ( k.empty() ) {
                 continue;
             }
@@ -285,7 +285,7 @@ namespace curly_hpp
 {
     class request::internal_state final {
     public:
-        internal_state(request_builder&& rb)
+        explicit internal_state(request_builder&& rb)
         : breq_(std::move(rb))
         {
             if ( !breq_.uploader() ) {
@@ -664,7 +664,7 @@ namespace curly_hpp
         void call_callback(Args&&... args) noexcept {
             try {
                 if ( breq_.callback() ) {
-                    breq_.callback()(std::forward<Args>(args)...);
+                    breq_.callback()(static_cast<request>(std::forward<Args>(args))...);
                 }
             } catch (...) {
                 std::lock_guard<std::mutex> guard(mutex_);

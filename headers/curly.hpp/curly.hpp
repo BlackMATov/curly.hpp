@@ -55,7 +55,7 @@ namespace curly_hpp
     class upload_handler {
     public:
         virtual ~upload_handler() = default;
-        virtual std::size_t size() const = 0;
+        [[nodiscard]] virtual std::size_t size() const = 0;
         virtual std::size_t read(char* dst, std::size_t size) = 0;
     };
 
@@ -145,68 +145,57 @@ namespace curly_hpp
         proxy_t(const proxy_t&) = default;
         proxy_t& operator=(const proxy_t&) = default;
 
-        proxy_t(std::string url) : proxy_(std::move(url))
-        {}
+        explicit proxy_t(std::string url)
+        : proxy_(std::move(url)) {}
 
-        proxy_t(std::string url, std::string username) :
-            proxy_(std::move(url)),
-            username_(std::move(username))
-        {}
+        proxy_t(std::string url, std::string username)
+        : proxy_(std::move(url))
+        , username_(std::move(username)) {}
 
-        proxy_t(std::string url, std::string username, std::string password) :
-            proxy_(std::move(url)),
-            username_(std::move(username)),
-            password_(std::move(password))
-        {}
+        proxy_t(std::string url, std::string username, std::string password)
+        : proxy_(std::move(url))
+        , username_(std::move(username))
+        , password_(std::move(password)) {}
 
-        proxy_t(std::string url, std::string username, std::string password, std::string public_key) :
-                proxy_(std::move(url)),
-                username_(std::move(username)),
-                password_(std::move(password)),
-                public_key_(std::move(public_key))
-        {}
+        proxy_t(std::string url, std::string username, std::string password, std::string public_key)
+        : proxy_(std::move(url))
+        , username_(std::move(username))
+        , password_(std::move(password))
+        , public_key_(std::move(public_key)) {}
 
-        proxy_t& proxy(std::string url)
-        {
+        proxy_t& proxy(std::string url) {
             proxy_ = std::move(url);
             return *this;
         }
 
-        proxy_t& username(std::string username)
-        {
+        proxy_t& username(std::string username) {
             username_ = std::move(username);
             return *this;
         }
 
-        proxy_t& password(std::string password)
-        {
+        proxy_t& password(std::string password) {
             password_ = std::move(password);
             return *this;
         }
 
-        proxy_t& public_key(std::string pubkey)
-        {
+        proxy_t& public_key(std::string pubkey) {
             public_key_ = std::move(pubkey);
             return *this;
         }
 
-        [[nodiscard]] const std::string& proxy() const noexcept
-        {
+        [[nodiscard]] const std::string& proxy() const noexcept {
             return proxy_;
         }
 
-        [[nodiscard]] const std::string& username() const noexcept
-        {
+        [[nodiscard]] const std::string& username() const noexcept {
             return username_;
         }
 
-        [[nodiscard]] const std::string& password() const noexcept
-        {
+        [[nodiscard]] const std::string& password() const noexcept {
             return password_;
         }
 
-        [[nodiscard]] const std::string& public_key() const noexcept
-        {
+        [[nodiscard]] const std::string& public_key() const noexcept {
             return public_key_;
         }
 
@@ -246,45 +235,38 @@ namespace curly_hpp
         client_cert_t(const client_cert_t&) = default;
         client_cert_t& operator=(const client_cert_t&) = default;
 
-        client_cert_t(std::string client_certificate) : certificate_(std::move(client_certificate))
-        {}
+        explicit client_cert_t(std::string client_certificate)
+        : certificate_(std::move(client_certificate)) {}
 
         client_cert_t(std::string certificate, ssl_cert_enum type, std::string password)
-        : certificate_(std::move(certificate)),
-          type_(type),
-          password_(std::move(password))
-        {}
+        : certificate_(std::move(certificate))
+        , type_(type)
+        , password_(std::move(password)) {}
 
-        client_cert_t& certificate(std::string certificate)
-        {
+        client_cert_t& certificate(std::string certificate) {
             certificate_ = std::move(certificate);
             return *this;
         }
 
-        client_cert_t& password(std::string password)
-        {
+        client_cert_t& password(std::string password) {
             password_ = std::move(password);
             return *this;
         }
 
-        client_cert_t& type(ssl_cert_enum type)
-        {
+        client_cert_t& type(ssl_cert_enum type) {
             type_ = type;
             return *this;
         }
 
-        [[nodiscard]] const std::string& certificate() const noexcept
-        {
+        [[nodiscard]] const std::string& certificate() const noexcept {
             return certificate_;
         }
 
-        [[nodiscard]] const std::string& password() const noexcept
-        {
+        [[nodiscard]] const std::string& password() const noexcept {
             return password_;
         }
 
-        [[nodiscard]] const char* type() const noexcept
-        {
+        [[nodiscard]] const char* type() const noexcept {
             return type_.type();
         }
 
@@ -302,18 +284,24 @@ namespace curly_hpp
         content_t() = default;
 
         content_t(content_t&&) = default;
+
         content_t& operator=(content_t&&) = default;
 
         content_t(const content_t&) = default;
         content_t& operator=(const content_t&) = default;
 
-        content_t(std::string_view data)
+        explicit content_t(std::string_view data)
         : data_(data.cbegin(), data.cend() ) {}
 
-        content_t(std::vector<char> data) noexcept
+        explicit content_t(std::vector<char> data)
         : data_(std::move(data)) {}
 
-        std::size_t size() const noexcept {
+        content_t& operator=(std::vector<char>&& data) {
+            data_ = std::move(data);
+            return *this;
+        }
+
+        [[nodiscard]] std::size_t size() const noexcept {
             return data_.size();
         }
 
@@ -321,15 +309,15 @@ namespace curly_hpp
             return data_;
         }
 
-        const std::vector<char>& data() const noexcept {
+        [[nodiscard]] const std::vector<char>& data() const noexcept {
             return data_;
         }
 
-        std::string as_string_copy() const {
+        [[nodiscard]] std::string as_string_copy() const {
             return {data_.data(), data_.size()};
         }
 
-        std::string_view as_string_view() const noexcept {
+        [[nodiscard]] std::string_view as_string_view() const noexcept {
             return {data_.data(), data_.size()};
         }
     private:
@@ -350,14 +338,14 @@ namespace curly_hpp
         response& operator=(const response&) = delete;
 
         explicit response(std::string u, http_code_t c) noexcept
-        : last_url_(u)
+        : last_url_(std::move(u))
         , http_code_(c) {}
 
-        bool is_http_error() const noexcept {
+        [[nodiscard]] bool is_http_error() const noexcept {
             return http_code_ >= 400u;
         }
 
-        const std::string& last_url() const noexcept {
+        [[nodiscard]] const std::string& last_url() const noexcept {
             return last_url_;
         }
 
@@ -394,7 +382,7 @@ namespace curly_hpp
     public:
         request() = default;
 
-        request(internal_state_ptr);
+        explicit request(internal_state_ptr);
 
         request(request&&) = default;
         request& operator=(request&&) = default;
@@ -403,23 +391,24 @@ namespace curly_hpp
         request& operator=(const request&) = default;
 
         bool cancel() noexcept;
-        float progress() const noexcept;
-        req_status status() const noexcept;
+        [[nodiscard]] float progress() const noexcept;
+        [[nodiscard]] req_status status() const noexcept;
 
-        bool is_done() const noexcept;
-        bool is_pending() const noexcept;
+        [[nodiscard]] bool is_done() const noexcept;
+        [[nodiscard]] bool is_pending() const noexcept;
 
-        req_status wait() const noexcept;
-        req_status wait_for(time_ms_t ms) const noexcept;
-        req_status wait_until(time_point_t tp) const noexcept;
+        [[nodiscard]] req_status wait() const noexcept;
+        [[nodiscard]] req_status wait_for(time_ms_t ms) const noexcept;
+        [[nodiscard]] req_status wait_until(time_point_t tp) const noexcept;
 
-        req_status wait_callback() const noexcept;
-        req_status wait_callback_for(time_ms_t ms) const noexcept;
-        req_status wait_callback_until(time_point_t tp) const noexcept;
+        [[nodiscard]] req_status wait_callback() const noexcept;
+        [[nodiscard]] req_status wait_callback_for(time_ms_t ms) const noexcept;
+        [[nodiscard]] req_status wait_callback_until(time_point_t tp) const noexcept;
 
         response take();
-        const std::string& get_error() const noexcept;
-        std::exception_ptr get_callback_exception() const noexcept;
+        [[nodiscard]] const std::string& get_error() const noexcept;
+
+        [[nodiscard]] std::exception_ptr get_callback_exception() const noexcept;
     private:
         internal_state_ptr state_{};
     };
@@ -490,19 +479,19 @@ namespace curly_hpp
         [[nodiscard]] time_ms_t connection_timeout() const noexcept;
 
         content_t& content() noexcept;
-        const content_t& content() const noexcept;
+        [[nodiscard]] const content_t& content() const noexcept;
 
         callback_t& callback() noexcept;
-        const callback_t& callback() const noexcept;
+        [[nodiscard]] const callback_t& callback() const noexcept;
 
         uploader_uptr& uploader() noexcept;
-        const uploader_uptr& uploader() const noexcept;
+        [[nodiscard]] const uploader_uptr& uploader() const noexcept;
 
         downloader_uptr& downloader() noexcept;
-        const downloader_uptr& downloader() const noexcept;
+        [[nodiscard]] const downloader_uptr& downloader() const noexcept;
 
         progressor_uptr& progressor() noexcept;
-        const progressor_uptr& progressor() const noexcept;
+        [[nodiscard]] const progressor_uptr& progressor() const noexcept;
 
         request send();
 

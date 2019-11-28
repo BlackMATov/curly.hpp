@@ -40,7 +40,7 @@ namespace
     public:
         cancelled_uploader() = default;
 
-        std::size_t size() const override {
+        [[nodiscard]] std::size_t size() const override {
             return 10;
         }
 
@@ -82,7 +82,7 @@ namespace
         return netex::make_promise<net::content_t>([
             url = std::move(url)
         ](auto resolve, auto reject){
-            net::request_builder(std::move(url))
+            net::request_builder(url)
                 .callback([resolve,reject](net::request request) mutable {
                     if ( !request.is_done() ) {
                         reject(net::exception("network error"));
@@ -100,7 +100,7 @@ namespace
 
     class file_downloader : public net::download_handler {
     public:
-        file_downloader(const char* filename)
+        explicit file_downloader(const char* filename)
                 : stream_(filename, std::ofstream::binary) {}
 
         std::size_t write(const char* src, std::size_t size) override {
@@ -191,7 +191,7 @@ TEST_CASE("curly") {
                 .send();
             REQUIRE_FALSE(req.is_done());
             REQUIRE(req.is_pending());
-            req.wait();
+            REQUIRE(req.wait() == net::req_status::done);
             REQUIRE(req.is_done());
             REQUIRE_FALSE(req.is_pending());
         }
@@ -202,7 +202,7 @@ TEST_CASE("curly") {
                 .send();
             REQUIRE_FALSE(req.is_done());
             REQUIRE(req.is_pending());
-            req.wait();
+            REQUIRE(req.wait() == net::req_status::timeout);
             REQUIRE_FALSE(req.is_done());
             REQUIRE_FALSE(req.is_pending());
             REQUIRE(!req.get_error().empty());
@@ -227,6 +227,15 @@ TEST_CASE("curly") {
             auto req = net::request_builder("https://httpbin.org/delay/2")
                 .response_timeout(net::time_sec_t(0))
                 .send();
+            REQUIRE(req.wait() == net::req_status::timeout);
+            REQUIRE_THROWS_AS(req.take(), net::exception);
+            REQUIRE(req.status() == net::req_status::timeout);
+        }
+        {
+            auto req = net::request_builder(net::http_method::GET)
+                    .url("http://www.google.com:81")
+                    .connection_timeout(net::time_ms_t(100))
+                    .send();
             REQUIRE(req.wait() == net::req_status::timeout);
             REQUIRE_THROWS_AS(req.take(), net::exception);
             REQUIRE(req.status() == net::req_status::timeout);
@@ -1039,7 +1048,7 @@ TEST_CASE("curly_examples") {
             .url("http://unavailable.site.com")
             .send();
 
-        request.wait();
+        REQUIRE(request.wait() == net::req_status::failed);
 
         if ( request.is_done() ) {
             auto response = request.take();
@@ -1065,7 +1074,7 @@ TEST_CASE("curly_examples") {
                 }
             }).send();
 
-        request.wait_callback();
+        REQUIRE(request.wait_callback() == net::req_status::empty);
         // Status code: 200
     }
 
@@ -1408,16 +1417,19 @@ SCENARIO("Custom CABundle")
 
     try
     {
-        WHEN("Non-existing cabundle")
+        WHEN("CA-bundle doesn't exist")
         {
-            auto req = net::request_builder("https://sha256.badssl.com")
-                    .method(net::http_method::HEAD)
-                    .verification(true, std::nullopt, local_file)
-                    .send();
-            REQUIRE(req.wait() == net::req_status::failed);
+            THEN("Request fails")
+            {
+                auto req = net::request_builder("https://sha256.badssl.com")
+                        .method(net::http_method::HEAD)
+                        .verification(true, std::nullopt, local_file)
+                        .send();
+                REQUIRE(req.wait() == net::req_status::failed);
+            }
         }
 
-        WHEN("Existing ca-bundle")
+        AND_WHEN("CA-bundle exists")
         {
             if (is_regular_file(local_file))
             {
@@ -1432,11 +1444,14 @@ SCENARIO("Custom CABundle")
 
                 REQUIRE(resp.http_code() == net::response_code::OK);
             }
-            auto req = net::request_builder("https://sha256.badssl.com")
-                    .method(net::http_method::HEAD)
-                    .verification(true, std::nullopt, local_file)
-                    .send();
-            REQUIRE(req.wait() == net::req_status::done);
+            THEN("Request is successful")
+            {
+                auto req = net::request_builder("https://sha256.badssl.com")
+                        .method(net::http_method::HEAD)
+                        .verification(true, std::nullopt, local_file)
+                        .send();
+                REQUIRE(req.wait() == net::req_status::done);
+            }
         }
     }
     catch (std::exception &ex)
@@ -1459,22 +1474,28 @@ SCENARIO("Public key pinning")
         constexpr const char* url = "https://httpbin.org/status/200";
         WHEN("Using a mismatching public key signature")
         {
-            auto req1 = net::request_builder(url)
-                    .method(net::http_method::GET)
-                    .verification(true)
-                    .pinned_public_key("sha256//9SLklscvzMYj8f+52lp5ze/hY0CFHyLSPQzSpYYIBm8=")
-                    .send();
-            REQUIRE(req1.get_error() == "Pinned pubkey mismatch");
-            REQUIRE(req1.status() == net::req_status::failed);
+            THEN("Request fails with 'Pinned pubkey mismatch'")
+            {
+                auto req1 = net::request_builder(url)
+                        .method(net::http_method::GET)
+                        .verification(true)
+                        .pinned_public_key("sha256//9SLklscvzMYj8f+52lp5ze/hY0CFHyLSPQzSpYYIBm8=")
+                        .send();
+                REQUIRE(req1.get_error() == "Pinned pubkey mismatch");
+                REQUIRE(req1.status() == net::req_status::failed);
+            }
         }
         AND_WHEN("Using a matching public key signature")
         {
-            auto req2 = net::request_builder(url)
-                    .method(net::http_method::GET)
-                    .verification(true)
-                    .pinned_public_key("sha256//Yvh6l+lXgqrBJrCtxwr9r/vbERE37/5/p6AaRRsiboQ=")
-                    .send();
-            REQUIRE(req2.take().http_code() == net::response_code::OK);
+            THEN("Request is successful")
+            {
+                auto req2 = net::request_builder(url)
+                        .method(net::http_method::GET)
+                        .verification(true)
+                        .pinned_public_key("sha256//Yvh6l+lXgqrBJrCtxwr9r/vbERE37/5/p6AaRRsiboQ=")
+                        .send();
+                REQUIRE(req2.take().http_code() == net::response_code::OK);
+            }
         }
     }
     catch (std::exception &ex)
