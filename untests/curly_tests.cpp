@@ -792,6 +792,18 @@ TEST_CASE("curly") {
             REQUIRE(content_j["form"]["hello"] == "world");
             REQUIRE(content_j["form"]["world"] == "hello");
         }
+        {
+            auto content = net::content_t{R"({"hello":"world"})"};
+            auto resp = net::request_builder()
+                .url("https://httpbin.org/anything")
+                .method(net::http_method::POST)
+                .header("Content-Type", "application/json")
+                .content(content)
+                .send()
+                .take();
+            const auto content_j = json_parse(resp.content.as_string_view());
+            REQUIRE(content_j["data"] == R"({"hello":"world"})");
+        }
     }
 
     SECTION("escaped request body")

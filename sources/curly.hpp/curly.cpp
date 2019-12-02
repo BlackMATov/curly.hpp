@@ -530,6 +530,7 @@ namespace curly_hpp
         bool fail(CURLcode err) noexcept {
             std::lock_guard<std::mutex> guard(mutex_);
             if ( status_ != req_status::pending ) {
+                cvar_.notify_all();
                 return false;
             }
 
@@ -569,6 +570,7 @@ namespace curly_hpp
         bool cancel() noexcept {
             std::lock_guard<std::mutex> guard(mutex_);
             if ( status_ != req_status::pending ) {
+                cvar_.notify_all();
                 return false;
             }
 

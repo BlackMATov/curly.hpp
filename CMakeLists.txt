@@ -97,7 +97,7 @@ if(USE_CONAN_CURL)
     else()
         message(FATAL_ERROR "The file conanbuildinfo.cmake doesn't exist, run conan install from ${CMAKE_BINARY_DIR} first")
     endif()
-    conan_basic_setup(TARGETS)
+    conan_basic_setup(TARGETS NO_OUTPUT_DIRS)
     target_link_libraries(${PROJECT_NAME} PUBLIC CONAN_PKG::libcurl)
 endif(USE_CONAN_CURL)
 
