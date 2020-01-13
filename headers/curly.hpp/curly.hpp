@@ -49,7 +49,8 @@ namespace curly_hpp
         HEAD,
         POST,
         PATCH,
-        OPTIONS
+        OPTIONS,
+        MULTIPART_FORM,
     };
 
     class upload_handler {
@@ -126,11 +127,18 @@ namespace curly_hpp
         std::string, std::string,
         detail::icase_string_compare>;
 
+    using fields_t = std::map<
+            std::string, std::string,
+            detail::icase_string_compare>;
+
     using qparam_ilist_t = std::initializer_list<
         std::pair<std::string_view, std::string_view>>;
 
     using header_ilist_t = std::initializer_list<
         std::pair<std::string_view, std::string_view>>;
+
+    using fields_ilist_t = std::initializer_list<
+            std::pair<std::string_view, std::string_view>>;
 }
 
 namespace curly_hpp
@@ -382,7 +390,7 @@ namespace curly_hpp
     public:
         request() = default;
 
-        explicit request(internal_state_ptr);
+        explicit request(const internal_state_ptr&);
 
         request(request&&) = default;
         request& operator=(request&&) = default;
@@ -441,6 +449,8 @@ namespace curly_hpp
 
         request_builder& headers(header_ilist_t hs);
         request_builder& header(std::string k, std::string v);
+        request_builder& fields(fields_ilist_t hs);
+        request_builder& field(std::string k, std::string v);
 
         request_builder& verbose(bool v) noexcept;
         request_builder& verification(bool v, std::optional<std::string> capath = std::nullopt,
@@ -466,6 +476,7 @@ namespace curly_hpp
         [[nodiscard]] const std::size_t& resume_offset() const noexcept;
         [[nodiscard]] const qparams_t& qparams() const noexcept;
         [[nodiscard]] const headers_t& headers() const noexcept;
+        [[nodiscard]] const fields_t& fields() const noexcept;
         [[nodiscard]] const client_cert_t& client_certificate() const noexcept;
         [[nodiscard]] const std::string& pinned_public_key() const noexcept;
 
@@ -508,6 +519,15 @@ namespace curly_hpp
         request_builder& headers(Iter first, Iter last) {
             while ( first != last ) {
                 header(first->first, first->second);
+                ++first;
+            }
+            return *this;
+        }
+
+        template < typename Iter >
+        request_builder& fields(Iter first, Iter last) {
+            while ( first != last ) {
+                field(first->first, first->second);
                 ++first;
             }
             return *this;
@@ -556,6 +576,8 @@ namespace curly_hpp
         http_method method_{http_method::GET};
         qparams_t qparams_;
         headers_t headers_;
+        fields_t fields_;
+
         bool verbose_{false};
         bool verification_{false};
         std::uint32_t redirections_{10u};
