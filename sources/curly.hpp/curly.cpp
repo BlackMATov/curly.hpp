@@ -70,6 +70,20 @@ namespace
             uploaded_ += size;
             return size;
         }
+
+        int seek(curl_off_t offset, int origin) override
+        {
+            auto res = CURL_SEEKFUNC_CANTSEEK;
+
+            if(origin == SEEK_SET)
+            {
+                uploaded_ = offset;
+                res = CURL_SEEKFUNC_OK;
+            }
+
+            return res;
+        }
+
     private:
         const data_t& data_;
         std::size_t uploaded_{0};
@@ -298,11 +312,6 @@ namespace
     std::unique_ptr<curl_state> curl_state::self_;
 }
 
-static int seek_cb(void *, curl_off_t, int)
-{
-    return CURL_SEEKFUNC_CANTSEEK;
-}
-
 // -----------------------------------------------------------------------------
 //
 // request
@@ -362,6 +371,9 @@ namespace curly_hpp
 
             curl_easy_setopt(curlh_.get(), CURLOPT_WRITEDATA, this);
             curl_easy_setopt(curlh_.get(), CURLOPT_WRITEFUNCTION, &s_download_callback_);
+
+            curl_easy_setopt(curlh_.get(), CURLOPT_SEEKDATA, this);
+            curl_easy_setopt(curlh_.get(), CURLOPT_SEEKFUNCTION, &s_upload_seek_callback_);
 
             curl_easy_setopt(curlh_.get(), CURLOPT_NOPROGRESS, 0l);
             curl_easy_setopt(curlh_.get(), CURLOPT_XFERINFODATA, this);
@@ -477,8 +489,6 @@ namespace curly_hpp
 
             curl_easy_setopt(curlh_.get(), CURLOPT_CONNECTTIMEOUT_MS,
                 static_cast<long>(std::max(time_ms_t(1), breq_.connection_timeout()).count()));
-
-            curl_easy_setopt(curlh_.get(), CURLOPT_SEEKFUNCTION, seek_cb);
 
             last_response_ = time_point_t::clock::now();
             response_timeout_ = std::max(time_ms_t(1), breq_.response_timeout());
@@ -724,6 +734,13 @@ namespace curly_hpp
             return self->upload_callback_(buffer, size * nitems);
         }
 
+        static std::size_t s_upload_seek_callback_(
+                void* userp, curl_off_t offset, int origin)
+        {
+            auto* self = static_cast<internal_state*>(userp);
+            return self->seek_callback_(userp, offset, origin);
+        }
+
         static std::size_t s_download_callback_(
             char* ptr, std::size_t size, std::size_t nmemb, void* userdata) noexcept
         {
@@ -757,6 +774,19 @@ namespace curly_hpp
                 return read_bytes;
             } catch (...) {
                 return CURL_READFUNC_ABORT;
+            }
+        }
+
+        int seek_callback_(void* /*internal_state*/, curl_off_t offset, int origin) noexcept
+        {
+            try
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                return breq_.uploader()->seek(offset, origin);
+            }
+            catch(...)
+            {
+                return CURL_SEEKFUNC_FAIL;
             }
         }
 

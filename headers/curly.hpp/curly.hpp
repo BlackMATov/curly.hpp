@@ -28,6 +28,7 @@
 #include <vector>
 #include <string>
 #include <initializer_list>
+#include <curl/system.h>
 #include "response_code.h"
 
 namespace curly_hpp
@@ -58,6 +59,7 @@ namespace curly_hpp
         virtual ~upload_handler() = default;
         [[nodiscard]] virtual std::size_t size() const = 0;
         virtual std::size_t read(char* dst, std::size_t size) = 0;
+        virtual int seek(curl_off_t offset, int origin) = 0;
     };
 
     class download_handler {
