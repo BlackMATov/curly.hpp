@@ -298,6 +298,11 @@ namespace
     std::unique_ptr<curl_state> curl_state::self_;
 }
 
+static int seek_cb(void *, curl_off_t, int)
+{
+    return CURL_SEEKFUNC_CANTSEEK;
+}
+
 // -----------------------------------------------------------------------------
 //
 // request
@@ -472,6 +477,8 @@ namespace curly_hpp
 
             curl_easy_setopt(curlh_.get(), CURLOPT_CONNECTTIMEOUT_MS,
                 static_cast<long>(std::max(time_ms_t(1), breq_.connection_timeout()).count()));
+
+            curl_easy_setopt(curlh_.get(), CURLOPT_SEEKFUNCTION, seek_cb);
 
             last_response_ = time_point_t::clock::now();
             response_timeout_ = std::max(time_ms_t(1), breq_.response_timeout());
