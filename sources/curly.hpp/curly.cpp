@@ -782,6 +782,7 @@ namespace curly_hpp
             try
             {
                 std::lock_guard<std::mutex> guard(mutex_);
+                uploaded_ = offset;
                 return breq_.uploader()->seek(offset, origin);
             }
             catch(...)

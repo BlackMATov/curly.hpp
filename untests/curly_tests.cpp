@@ -21,6 +21,8 @@ namespace json = rapidjson;
 namespace net = curly_hpp;
 
 #include <promise.hpp/promise.hpp>
+#include <curl/curl.h>
+
 namespace netex = promise_hpp;
 
 #include "png_data.h"
@@ -48,6 +50,11 @@ namespace
             (void)dst;
             (void)size;
             throw std::exception();
+        }
+
+        int seek(curl_off_t, int) override
+        {
+            return CURL_SEEKFUNC_CANTSEEK;
         }
     };
 
@@ -1115,6 +1122,19 @@ TEST_CASE("curly_examples") {
                 std::size_t read(char* dst, std::size_t size) override {
                     stream_.read(dst, size);
                     return size;
+                }
+
+                int seek(curl_off_t offset, int origin) override
+                {
+                    auto res = CURL_SEEKFUNC_CANTSEEK;
+
+                    if(origin == SEEK_SET)
+                    {
+                        stream_.seekg(offset, std::ios::beg);
+                        res = CURL_SEEKFUNC_OK;
+                    }
+
+                    return res;
                 }
             private:
                 std::size_t size_{0u};
