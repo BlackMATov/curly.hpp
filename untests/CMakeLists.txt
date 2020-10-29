@@ -73,7 +73,8 @@ endif()
 include(FetchContent)
 FetchContent_Declare(
     blackmatov_promise_hpp
-    GIT_REPOSITORY https://github.com/blackmatov/promise.hpp)
+    GIT_REPOSITORY https://github.com/blackmatov/promise.hpp
+    GIT_TAG origin/main)
 
 FetchContent_GetProperties(blackmatov_promise_hpp)
 if(NOT blackmatov_promise_hpp_POPULATED)

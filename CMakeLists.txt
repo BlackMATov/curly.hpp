@@ -100,7 +100,7 @@ if(USE_EMBEDDED_CURL)
     FetchContent_Declare(
         embedded_curl
         GIT_REPOSITORY https://github.com/curl/curl
-        GIT_TAG curl-7_65_1)
+        GIT_TAG curl-7_73_0)
 
     FetchContent_GetProperties(embedded_curl)
     if(NOT embedded_curl_POPULATED)
@@ -118,7 +118,7 @@ if(USE_EMBEDDED_CURL)
     endif()
 
     if(WIN32)
-        set(CMAKE_USE_WINSSL ON CACHE BOOL "" FORCE)
+        set(CMAKE_USE_SCHANNEL ON CACHE BOOL "" FORCE)
         set(CURL_CA_PATH "none" CACHE STRING "" FORCE)
         set(CURL_CA_BUNDLE "none" CACHE STRING "" FORCE)
     endif()
