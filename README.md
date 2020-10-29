@@ -9,9 +9,9 @@
 [![license][badge.license]][license]
 [![paypal][badge.paypal]][paypal]
 
-[badge.travis]: https://img.shields.io/travis/BlackMATov/curly.hpp/master.svg?logo=travis
-[badge.appveyor]: https://img.shields.io/appveyor/ci/BlackMATov/curly-hpp/master.svg?logo=appveyor
-[badge.codecov]: https://img.shields.io/codecov/c/github/BlackMATov/curly.hpp/master.svg?logo=codecov
+[badge.travis]: https://img.shields.io/travis/BlackMATov/curly.hpp/main.svg?logo=travis
+[badge.appveyor]: https://img.shields.io/appveyor/ci/BlackMATov/curly-hpp/main.svg?logo=appveyor
+[badge.codecov]: https://img.shields.io/codecov/c/github/BlackMATov/curly.hpp/main.svg?logo=codecov
 [badge.language]: https://img.shields.io/badge/language-C%2B%2B17-yellow.svg
 [badge.license]: https://img.shields.io/badge/license-MIT-blue.svg
 [badge.paypal]: https://img.shields.io/badge/donate-PayPal-orange.svg?logo=paypal&colorA=00457C
@@ -34,6 +34,12 @@
 - Completion and progress callbacks
 - Custom uploading and downloading streams
 - PUT, GET, HEAD, POST, PATCH, DELETE, OPTIONS methods
+
+## Requirements
+
+- [gcc](https://www.gnu.org/software/gcc/) **>= 7**
+- [clang](https://clang.llvm.org/) **>= 5.0**
+- [msvc](https://visualstudio.microsoft.com/) **>= 2017**
 
 ## Installation
 
@@ -283,7 +289,3 @@ auto promise = download("https://httpbin.org/image/png")
 promise.wait();
 // 8090 bytes downloaded
 ```
-
-## API
-
-> coming soon!
