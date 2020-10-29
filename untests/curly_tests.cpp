@@ -562,7 +562,7 @@ TEST_CASE("curly") {
             auto req = net::request_builder()
                 .url("http://httpbin.org/drip?duration=15&numbytes=5&code=200&delay=1")
                 .method(net::http_method::GET)
-                .response_timeout(net::time_sec_t(3))
+                .response_timeout(net::time_sec_t(2))
                 .send();
             REQUIRE(req.wait_for(net::time_sec_t(1)) == net::req_status::pending);
             REQUIRE(req.wait_for(net::time_sec_t(5)) == net::req_status::timeout);
@@ -639,21 +639,21 @@ TEST_CASE("curly") {
         {
             {
                 auto req = net::request_builder()
-                    .url("https://httpbin.org/redirect/2")
+                    .url("http://httpbingo.org/redirect/2")
                     .method(net::http_method::GET)
                     .send();
                 REQUIRE(req.take().http_code() == 200u);
             }
             {
                 auto req = net::request_builder()
-                    .url("https://httpbin.org/absolute-redirect/2")
+                    .url("http://httpbingo.org/absolute-redirect/2")
                     .method(net::http_method::GET)
                     .send();
                 REQUIRE(req.take().http_code() == 200u);
             }
             {
                 auto req = net::request_builder()
-                    .url("https://httpbin.org/relative-redirect/2")
+                    .url("http://httpbingo.org/relative-redirect/2")
                     .method(net::http_method::GET)
                     .send();
                 REQUIRE(req.take().http_code() == 200u);
@@ -662,7 +662,7 @@ TEST_CASE("curly") {
         {
             {
                 auto req = net::request_builder()
-                    .url("https://httpbin.org/redirect/3")
+                    .url("http://httpbingo.org/redirect/3")
                     .method(net::http_method::GET)
                     .redirections(0)
                     .send();
@@ -670,7 +670,7 @@ TEST_CASE("curly") {
             }
             {
                 auto req = net::request_builder()
-                    .url("https://httpbin.org/redirect/3")
+                    .url("http://httpbingo.org/redirect/3")
                     .method(net::http_method::GET)
                     .redirections(1)
                     .send();
@@ -678,7 +678,7 @@ TEST_CASE("curly") {
             }
             {
                 auto req = net::request_builder()
-                    .url("https://httpbin.org/redirect/3")
+                    .url("http://httpbingo.org/redirect/3")
                     .method(net::http_method::GET)
                     .redirections(2)
                     .send();
@@ -686,7 +686,7 @@ TEST_CASE("curly") {
             }
             {
                 auto req = net::request_builder()
-                    .url("https://httpbin.org/redirect/3")
+                    .url("http://httpbingo.org/redirect/3")
                     .method(net::http_method::GET)
                     .redirections(3)
                     .send();

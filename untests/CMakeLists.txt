@@ -40,7 +40,8 @@ add_test(${PROJECT_NAME} ${PROJECT_NAME})
 include(FetchContent)
 FetchContent_Declare(
     catchorg_catch2
-    GIT_REPOSITORY https://github.com/catchorg/catch2)
+    GIT_REPOSITORY https://github.com/catchorg/catch2
+    GIT_TAG v2.13.2)
 
 FetchContent_GetProperties(catchorg_catch2)
 if(NOT catchorg_catch2_POPULATED)
