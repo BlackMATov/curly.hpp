@@ -26,6 +26,7 @@
 #include <map>
 #include <vector>
 #include <string>
+#include <string_view>
 #include <initializer_list>
 
 namespace curly_hpp
