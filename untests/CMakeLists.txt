@@ -19,7 +19,7 @@ endif()
 # executable
 #
 
-file(GLOB UNTESTS_SOURCES "*.cpp" "*.hpp")
+file(GLOB_RECURSE UNTESTS_SOURCES "*.cpp" "*.hpp")
 add_executable(${PROJECT_NAME} ${UNTESTS_SOURCES})
 target_link_libraries(${PROJECT_NAME} curly.hpp)
 
@@ -32,23 +32,6 @@ target_compile_options(${PROJECT_NAME}
         -Wall -Wextra -Wpedantic>)
 
 add_test(${PROJECT_NAME} ${PROJECT_NAME})
-
-#
-# catchorg/catch2
-#
-
-include(FetchContent)
-FetchContent_Declare(
-    catchorg_catch2
-    GIT_REPOSITORY https://github.com/catchorg/catch2
-    GIT_TAG v2.13.2)
-
-FetchContent_GetProperties(catchorg_catch2)
-if(NOT catchorg_catch2_POPULATED)
-    FetchContent_Populate(catchorg_catch2)
-    target_include_directories(${PROJECT_NAME}
-        PRIVATE ${catchorg_catch2_SOURCE_DIR}/single_include)
-endif()
 
 #
 # tencent/rapidjson
