@@ -1,17 +1,10 @@
 /*******************************************************************************
  * This file is part of the "https://github.com/blackmatov/curly.hpp"
  * For conditions of distribution and use, see copyright notice in LICENSE.md
- * Copyright (C) 2019-2020, by Matvey Cherevko (blackmatov@gmail.com)
+ * Copyright (C) 2019-2021, by Matvey Cherevko (blackmatov@gmail.com)
  ******************************************************************************/
 
-#include <catch2/catch.hpp>
-
-#include <fstream>
-#include <utility>
-#include <iostream>
-
-#include <rapidjson/document.h>
-namespace json = rapidjson;
+#include "doctest/doctest.h"
 
 #include <curly.hpp/curly.hpp>
 namespace net = curly_hpp;
@@ -19,8 +12,15 @@ namespace net = curly_hpp;
 #include <promise.hpp/promise.hpp>
 namespace netex = promise_hpp;
 
+#include <rapidjson/document.h>
+namespace json = rapidjson;
+
 #include "png_data.h"
 #include "jpeg_data.h"
+
+#include <fstream>
+#include <utility>
+#include <iostream>
 
 namespace
 {
@@ -99,7 +99,7 @@ TEST_CASE("curly") {
     net::performer performer;
     performer.wait_activity(net::time_ms_t(10));
 
-    SECTION("wait") {
+    SUBCASE("wait") {
         {
             auto req = net::request_builder("https://httpbin.org/delay/1").send();
             REQUIRE(req.status() == net::req_status::pending);
@@ -125,14 +125,14 @@ TEST_CASE("curly") {
         }
     }
 
-    SECTION("error") {
+    SUBCASE("error") {
         auto req = net::request_builder("|||").send();
         REQUIRE(req.wait() == net::req_status::failed);
         REQUIRE(req.status() == net::req_status::failed);
         REQUIRE_FALSE(req.get_error().empty());
     }
 
-    SECTION("cancel") {
+    SUBCASE("cancel") {
         {
             auto req = net::request_builder("https://httpbin.org/delay/1").send();
             REQUIRE(req.cancel());
@@ -148,7 +148,7 @@ TEST_CASE("curly") {
         }
     }
 
-    SECTION("is_done/is_pending") {
+    SUBCASE("is_done/is_pending") {
         {
             auto req = net::request_builder(net::http_method::GET)
                 .url("https://httpbin.org/delay/1")
@@ -173,7 +173,7 @@ TEST_CASE("curly") {
         }
     }
 
-    SECTION("get") {
+    SUBCASE("get") {
         {
             auto req = net::request_builder("https://httpbin.org/status/204").send();
             auto resp = req.take();
@@ -197,7 +197,7 @@ TEST_CASE("curly") {
         }
     }
 
-    SECTION("http_methods") {
+    SUBCASE("http_methods") {
         {
             auto req0 = net::request_builder()
                 .url("https://httpbin.org/put")
@@ -326,7 +326,7 @@ TEST_CASE("curly") {
         }
     }
 
-    SECTION("status_codes") {
+    SUBCASE("status_codes") {
         {
             auto req = net::request_builder()
                 .url("https://httpbin.org/status/200")
@@ -371,7 +371,7 @@ TEST_CASE("curly") {
         }
     }
 
-    SECTION("request_inspection") {
+    SUBCASE("request_inspection") {
         {
             auto resp = net::request_builder()
                 .url("https://httpbin.org/headers")
@@ -426,7 +426,7 @@ TEST_CASE("curly") {
         }
     }
 
-    SECTION("response_inspection") {
+    SUBCASE("response_inspection") {
         {
             auto req = net::request_builder()
                 .url("https://httpbin.org/response-headers?hello=world&world=hello")
@@ -492,7 +492,7 @@ TEST_CASE("curly") {
         }
     }
 
-    SECTION("dynamic_data") {
+    SUBCASE("dynamic_data") {
         {
             auto req = net::request_builder()
                 .url("https://httpbin.org/base64/SFRUUEJJTiBpcyBhd2Vzb21l")
@@ -533,7 +533,7 @@ TEST_CASE("curly") {
         }
     }
 
-    SECTION("binary") {
+    SUBCASE("binary") {
         {
             auto resp = net::request_builder()
                 .url("https://httpbin.org/bytes/5")
@@ -635,7 +635,7 @@ TEST_CASE("curly") {
         }
     }
 
-    SECTION("redirects") {
+    SUBCASE("redirects") {
         {
             {
                 auto req = net::request_builder()
@@ -695,7 +695,7 @@ TEST_CASE("curly") {
         }
     }
 
-    SECTION("request_body") {
+    SUBCASE("request_body") {
         {
             auto resp = net::request_builder()
                 .url("https://httpbin.org/anything")
@@ -749,7 +749,7 @@ TEST_CASE("curly") {
         }
     }
 
-    SECTION("ssl_verification") {
+    SUBCASE("ssl_verification") {
         {
             auto req0 = net::request_builder("https://expired.badssl.com")
                 .method(net::http_method::HEAD)
@@ -802,7 +802,7 @@ TEST_CASE("curly") {
         }
     }
 
-    SECTION("cancelled_handlers") {
+    SUBCASE("cancelled_handlers") {
         {
             auto req = net::request_builder("https://httpbin.org/anything")
                 .verbose(true)
@@ -829,7 +829,7 @@ TEST_CASE("curly") {
         }
     }
 
-    SECTION("callback") {
+    SUBCASE("callback") {
         {
             std::atomic_size_t call_once{0u};
             auto req = net::request_builder("http://www.httpbin.org/get")
@@ -890,7 +890,7 @@ TEST_CASE("curly") {
         }
     }
 
-    SECTION("callback_exception") {
+    SUBCASE("callback_exception") {
         auto req = net::request_builder("http://www.httpbin.org/post")
             .callback([](net::request request){
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -911,7 +911,7 @@ TEST_CASE("curly") {
 TEST_CASE("curly_examples") {
     net::performer performer;
 
-    SECTION("Get Requests") {
+    SUBCASE("Get Requests") {
         // makes a GET request and async send it
         auto request = net::request_builder()
             .method(net::http_method::GET)
@@ -940,7 +940,7 @@ TEST_CASE("curly_examples") {
         // }
     }
 
-    SECTION("Post Requests") {
+    SUBCASE("Post Requests") {
         auto request = net::request_builder()
             .method(net::http_method::POST)
             .url("http://www.httpbin.org/post")
@@ -973,7 +973,7 @@ TEST_CASE("curly_examples") {
         // Content Length: 389
     }
 
-    SECTION("Query Parameters") {
+    SUBCASE("Query Parameters") {
         auto request = net::request_builder()
             .url("http://httpbin.org/anything")
             .qparam("hello", "world")
@@ -985,7 +985,7 @@ TEST_CASE("curly_examples") {
         // Last URL: http://httpbin.org/anything?hello=world
     }
 
-    SECTION("Error Handling") {
+    SUBCASE("Error Handling") {
         auto request = net::request_builder()
             .url("http://unavailable.site.com")
             .send();
@@ -1005,7 +1005,7 @@ TEST_CASE("curly_examples") {
         // Error message: Could not resolve host: unavailable.site.com
     }
 
-    SECTION("Request Callbacks") {
+    SUBCASE("Request Callbacks") {
         auto request = net::request_builder("http://www.httpbin.org/get")
             .callback([](net::request request){
                 if ( request.is_done() ) {
@@ -1020,7 +1020,7 @@ TEST_CASE("curly_examples") {
         // Status code: 200
     }
 
-    SECTION("Streamed Requests") {
+    SUBCASE("Streamed Requests") {
         {
             class file_dowloader : public net::download_handler {
             public:
@@ -1071,7 +1071,7 @@ TEST_CASE("curly_examples") {
         }
     }
 
-    SECTION("Promised Requests") {
+    SUBCASE("Promised Requests") {
         auto promise = download("https://httpbin.org/image/png")
             .then([](const net::content_t& content){
                 std::cout << content.size() << " bytes downloaded" << std::endl;

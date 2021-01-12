@@ -100,7 +100,7 @@ if(USE_EMBEDDED_CURL)
     FetchContent_Declare(
         embedded_curl
         GIT_REPOSITORY https://github.com/curl/curl
-        GIT_TAG curl-7_73_0)
+        GIT_TAG curl-7_74_0)
 
     FetchContent_GetProperties(embedded_curl)
     if(NOT embedded_curl_POPULATED)
