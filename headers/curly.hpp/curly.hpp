@@ -417,4 +417,5 @@ namespace curly_hpp
 {
     void perform();
     void wait_activity(time_ms_t ms);
+    void cancel_all_pending_requests();
 }

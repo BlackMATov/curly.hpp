@@ -1141,4 +1141,20 @@ namespace curly_hpp
             }
         });
     }
+
+    void cancel_all_pending_requests() {
+        curl_state::with([](CURLM* curlm){
+            req_state_t sreq;
+            while ( new_handles.try_dequeue(sreq) ) {
+                sreq->cancel();
+                sreq->call_callback(sreq);
+            }
+            for ( auto iter = active_handles.begin(); iter != active_handles.end(); ) {
+                (*iter)->cancel();
+                (*iter)->dequeue(curlm);
+                (*iter)->call_callback(*iter);
+                iter = active_handles.erase(iter);
+            }
+        });
+    }
 }
