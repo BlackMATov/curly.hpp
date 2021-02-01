@@ -908,6 +908,115 @@ TEST_CASE("curly") {
     }
 }
 
+TEST_CASE("curly/cancel_all_pending_requests") {
+    SUBCASE("cancel new requests") {
+        std::atomic_size_t call_count{0u};
+
+        auto req1 = net::request_builder("https://httpbin.org/delay/2")
+            .callback([&call_count](net::request request){
+                REQUIRE(request.status() == net::req_status::cancelled);
+                ++call_count;
+            }).send();
+
+        auto req2 = net::request_builder("https://httpbin.org/delay/2")
+            .callback([&call_count](net::request request){
+                REQUIRE(request.status() == net::req_status::cancelled);
+                ++call_count;
+            }).send();
+
+        net::cancel_all_pending_requests();
+
+        REQUIRE(call_count == 2u);
+        REQUIRE(req1.status() == net::req_status::cancelled);
+        REQUIRE(req2.status() == net::req_status::cancelled);
+    }
+
+    SUBCASE("cancel active requests") {
+        std::atomic_size_t call_count{0u};
+
+        auto req1 = net::request_builder("https://httpbin.org/delay/2")
+            .callback([&call_count](net::request request){
+                REQUIRE(request.status() == net::req_status::cancelled);
+                ++call_count;
+            }).send();
+
+        auto req2 = net::request_builder("https://httpbin.org/delay/2")
+            .callback([&call_count](net::request request){
+                REQUIRE(request.status() == net::req_status::cancelled);
+                ++call_count;
+            }).send();
+
+        net::perform();
+        net::cancel_all_pending_requests();
+
+        REQUIRE(call_count == 2u);
+        REQUIRE(req1.status() == net::req_status::cancelled);
+        REQUIRE(req2.status() == net::req_status::cancelled);
+    }
+}
+
+TEST_CASE("curly/get_all_pending_requests") {
+    SUBCASE("get new requests") {
+        std::atomic_size_t call_count{0u};
+
+        auto req1 = net::request_builder("https://httpbin.org/delay/2")
+            .callback([&call_count](net::request request){
+                REQUIRE(request.status() == net::req_status::cancelled);
+                ++call_count;
+            }).send();
+
+        auto req2 = net::request_builder("https://httpbin.org/delay/2")
+            .callback([&call_count](net::request request){
+                REQUIRE(request.status() == net::req_status::cancelled);
+                ++call_count;
+            }).send();
+
+        std::vector<net::request> requests = net::get_all_pending_requests();
+        REQUIRE(requests.size() == 2u);
+
+        for ( net::request& req : requests ) {
+            req.cancel();
+        }
+
+        net::perform();
+
+        REQUIRE(call_count == 2u);
+        REQUIRE(req1.status() == net::req_status::cancelled);
+        REQUIRE(req2.status() == net::req_status::cancelled);
+    }
+
+    SUBCASE("get active requests") {
+        std::atomic_size_t call_count{0u};
+
+        auto req1 = net::request_builder("https://httpbin.org/delay/2")
+            .callback([&call_count](net::request request){
+                REQUIRE(request.status() == net::req_status::cancelled);
+                ++call_count;
+            }).send();
+
+        auto req2 = net::request_builder("https://httpbin.org/delay/2")
+            .callback([&call_count](net::request request){
+                REQUIRE(request.status() == net::req_status::cancelled);
+                ++call_count;
+            }).send();
+
+        net::perform();
+
+        std::vector<net::request> requests = net::get_all_pending_requests();
+        REQUIRE(requests.size() == 2u);
+
+        for ( net::request& req : requests ) {
+            req.cancel();
+        }
+
+        net::perform();
+
+        REQUIRE(call_count == 2u);
+        REQUIRE(req1.status() == net::req_status::cancelled);
+        REQUIRE(req2.status() == net::req_status::cancelled);
+    }
+}
+
 TEST_CASE("curly_examples") {
     net::performer performer;
 
