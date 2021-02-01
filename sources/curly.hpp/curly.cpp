@@ -1071,6 +1071,10 @@ namespace curly_hpp
         curl_state::with([](CURLM* curlm){
             req_state_t sreq;
             while ( new_handles.try_dequeue(sreq) ) {
+                if ( !sreq->is_pending() ) {
+                    sreq->call_callback(sreq);
+                    continue;
+                }
                 try {
                     sreq->enqueue(curlm);
                     active_handles.emplace_back(sreq);
