@@ -1115,7 +1115,7 @@ TEST_CASE("curly_examples") {
     }
 
     SUBCASE("Request Callbacks") {
-        auto request = net::request_builder("http://www.httpbin.org/get")
+        auto req = net::request_builder("http://www.httpbin.org/get")
             .callback([](net::request request){
                 if ( request.is_done() ) {
                     auto response = request.take();
@@ -1125,7 +1125,7 @@ TEST_CASE("curly_examples") {
                 }
             }).send();
 
-        request.wait_callback();
+        req.wait_callback();
         // Status code: 200
     }
 
@@ -1137,7 +1137,7 @@ TEST_CASE("curly_examples") {
                 : stream_(filename, std::ofstream::binary) {}
 
                 std::size_t write(const char* src, std::size_t size) override {
-                    stream_.write(src, size);
+                    stream_.write(src, static_cast<std::streamsize>(size));
                     return size;
                 }
             private:
@@ -1164,7 +1164,7 @@ TEST_CASE("curly_examples") {
                 }
 
                 std::size_t read(char* dst, std::size_t size) override {
-                    stream_.read(dst, size);
+                    stream_.read(dst, static_cast<std::streamsize>(size));
                     return size;
                 }
             private:

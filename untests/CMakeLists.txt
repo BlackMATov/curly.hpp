@@ -1,6 +1,3 @@
-# 3.11 version is required for `FetchContent`
-cmake_minimum_required(VERSION 3.11 FATAL_ERROR)
-
 project(curly.hpp.untests)
 
 #
@@ -25,11 +22,19 @@ target_link_libraries(${PROJECT_NAME} curly.hpp)
 
 target_compile_options(${PROJECT_NAME}
     PRIVATE
-    $<$<CXX_COMPILER_ID:MSVC>:
-        /W4>
+    $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:
+        -Wno-zero-as-null-pointer-constant>)
+
+target_compile_options(${PROJECT_NAME}
     PRIVATE
-    $<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:
-        -Wall -Wextra -Wpedantic>)
+    $<$<CXX_COMPILER_ID:MSVC>:
+        /WX /W4>
+    PRIVATE
+    $<$<CXX_COMPILER_ID:GNU>:
+        -Werror -Wall -Wextra -Wpedantic>
+    PRIVATE
+    $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:
+        -Werror -Weverything -Wconversion>)
 
 add_test(${PROJECT_NAME} ${PROJECT_NAME})
 
