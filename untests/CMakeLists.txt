@@ -1,6 +1,3 @@
-# 3.11 version is required for `FetchContent`
-cmake_minimum_required(VERSION 3.11 FATAL_ERROR)
-
 project(curly.hpp.untests)
 
 #

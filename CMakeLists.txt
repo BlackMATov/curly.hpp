@@ -1,5 +1,5 @@
-# 3.8 version is required for `cxx_std_17`
-cmake_minimum_required(VERSION 3.8 FATAL_ERROR)
+# 3.11 version is required for `FetchContent`
+cmake_minimum_required(VERSION 3.11 FATAL_ERROR)
 
 if(NOT DEFINED PROJECT_NAME)
     set(BUILD_AS_STANDALONE ON)
@@ -76,6 +76,12 @@ target_include_directories(${PROJECT_NAME}
 target_compile_features(${PROJECT_NAME}
     PUBLIC cxx_std_17)
 
+target_compile_definitions(${PROJECT_NAME}
+    PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:
+        NOMINMAX
+        WIN32_LEAN_AND_MEAN>)
+
 target_compile_options(${PROJECT_NAME}
     PRIVATE
     $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:
@@ -123,7 +129,7 @@ if(USE_EMBEDDED_CURL)
     FetchContent_Declare(
         embedded_curl
         GIT_REPOSITORY https://github.com/curl/curl
-        GIT_TAG curl-7_74_0)
+        GIT_TAG curl-7_78_0)
 
     FetchContent_GetProperties(embedded_curl)
     if(NOT embedded_curl_POPULATED)
