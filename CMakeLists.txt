@@ -3,6 +3,8 @@ cmake_minimum_required(VERSION 3.8 FATAL_ERROR)
 
 if(NOT DEFINED PROJECT_NAME)
     set(BUILD_AS_STANDALONE ON)
+else()
+    set(BUILD_AS_STANDALONE OFF)
 endif()
 
 project(curly.hpp)
@@ -76,11 +78,32 @@ target_compile_features(${PROJECT_NAME}
 
 target_compile_options(${PROJECT_NAME}
     PRIVATE
+    $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:
+        -Wno-covered-switch-default
+        -Wno-disabled-macro-expansion
+        -Wno-exit-time-destructors
+        -Wno-global-constructors
+        -Wno-switch-enum>)
+
+target_compile_options(${PROJECT_NAME}
+    PUBLIC
+    $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:
+        -Wno-c++98-compat-pedantic
+        -Wno-ctad-maybe-unsupported
+        -Wno-padded
+        -Wno-unknown-warning-option
+        -Wno-weak-vtables>)
+
+target_compile_options(${PROJECT_NAME}
+    PRIVATE
     $<$<CXX_COMPILER_ID:MSVC>:
         /W4>
     PRIVATE
-    $<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:
-        -Wall -Wextra -Wpedantic>)
+    $<$<CXX_COMPILER_ID:GNU>:
+        -Wall -Wextra -Wpedantic>
+    PRIVATE
+    $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:
+        -Weverything -Wconversion>)
 
 #
 # dependencies
