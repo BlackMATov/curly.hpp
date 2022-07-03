@@ -1,10 +1,10 @@
 /*******************************************************************************
  * This file is part of the "https://github.com/blackmatov/curly.hpp"
  * For conditions of distribution and use, see copyright notice in LICENSE.md
- * Copyright (C) 2019-2021, by Matvey Cherevko (blackmatov@gmail.com)
+ * Copyright (C) 2019-2022, by Matvey Cherevko (blackmatov@gmail.com)
  ******************************************************************************/
 
-#include "doctest/doctest.h"
+#include "doctest/doctest.hpp"
 
 #include <curly.hpp/curly.hpp>
 namespace net = curly_hpp;
