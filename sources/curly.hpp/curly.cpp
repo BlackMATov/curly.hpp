@@ -35,7 +35,7 @@ namespace
     public:
         using data_t = std::vector<char>;
 
-        default_uploader(const data_t* src) noexcept
+        explicit default_uploader(const data_t* src) noexcept
         : data_(*src)
         , size_(src->size()) {}
 
@@ -59,7 +59,7 @@ namespace
     public:
         using data_t = std::vector<char>;
 
-        default_downloader(data_t* dst) noexcept
+        explicit default_downloader(data_t* dst) noexcept
         : data_(*dst) {}
 
         std::size_t write(const char* src, std::size_t size) override {
