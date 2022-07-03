@@ -1,7 +1,7 @@
 /*******************************************************************************
  * This file is part of the "https://github.com/blackmatov/curly.hpp"
  * For conditions of distribution and use, see copyright notice in LICENSE.md
- * Copyright (C) 2019-2021, by Matvey Cherevko (blackmatov@gmail.com)
+ * Copyright (C) 2019-2022, by Matvey Cherevko (blackmatov@gmail.com)
  ******************************************************************************/
 
 #include <curly.hpp/curly.hpp>
@@ -35,6 +35,7 @@ namespace
     public:
         using data_t = std::vector<char>;
 
+        [[maybe_unused]]
         explicit default_uploader(const data_t* src) noexcept
         : data_(*src)
         , size_(src->size()) {}
@@ -59,6 +60,7 @@ namespace
     public:
         using data_t = std::vector<char>;
 
+        [[maybe_unused]]
         explicit default_downloader(data_t* dst) noexcept
         : data_(*dst) {}
 
@@ -72,6 +74,7 @@ namespace
 
     class default_progressor final : public progress_handler {
     public:
+        [[maybe_unused]]
         default_progressor() = default;
 
         float update(
@@ -251,6 +254,7 @@ namespace
             }
         }
 
+        [[maybe_unused]]
         ~curl_state() noexcept {
             std::lock_guard<std::mutex> guard(mutex_);
             curl_multi_cleanup(curlm_);
