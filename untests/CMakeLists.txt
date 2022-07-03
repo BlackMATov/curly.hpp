@@ -23,18 +23,14 @@ target_link_libraries(${PROJECT_NAME} curly.hpp)
 target_compile_options(${PROJECT_NAME}
     PRIVATE
     $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:
-        -Wno-zero-as-null-pointer-constant>)
-
-target_compile_options(${PROJECT_NAME}
-    PRIVATE
-    $<$<CXX_COMPILER_ID:MSVC>:
-        /WX /W4>
-    PRIVATE
-    $<$<CXX_COMPILER_ID:GNU>:
-        -Werror -Wall -Wextra -Wpedantic>
-    PRIVATE
-    $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:
-        -Werror -Weverything -Wconversion>)
+        -Wno-c++98-compat
+        -Wno-c++98-compat-pedantic
+        -Wno-ctad-maybe-unsupported
+        -Wno-padded
+        -Wno-unknown-warning-option
+        -Wno-weak-vtables
+        -Wno-zero-as-null-pointer-constant
+        >)
 
 add_test(${PROJECT_NAME} ${PROJECT_NAME})
 

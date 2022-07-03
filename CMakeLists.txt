@@ -85,31 +85,18 @@ target_compile_definitions(${PROJECT_NAME}
 target_compile_options(${PROJECT_NAME}
     PRIVATE
     $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:
+        -Wno-c++98-compat
+        -Wno-c++98-compat-pedantic
         -Wno-covered-switch-default
         -Wno-disabled-macro-expansion
+        -Wno-documentation-unknown-command
         -Wno-exit-time-destructors
         -Wno-global-constructors
-        -Wno-switch-enum>)
-
-target_compile_options(${PROJECT_NAME}
-    PUBLIC
-    $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:
-        -Wno-c++98-compat-pedantic
-        -Wno-ctad-maybe-unsupported
         -Wno-padded
+        -Wno-switch-enum
         -Wno-unknown-warning-option
-        -Wno-weak-vtables>)
-
-target_compile_options(${PROJECT_NAME}
-    PRIVATE
-    $<$<CXX_COMPILER_ID:MSVC>:
-        /W4>
-    PRIVATE
-    $<$<CXX_COMPILER_ID:GNU>:
-        -Wall -Wextra -Wpedantic>
-    PRIVATE
-    $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:
-        -Weverything -Wconversion>)
+        -Wno-weak-vtables
+        >)
 
 #
 # dependencies
@@ -129,7 +116,7 @@ if(USE_EMBEDDED_CURL)
     FetchContent_Declare(
         embedded_curl
         GIT_REPOSITORY https://github.com/curl/curl
-        GIT_TAG curl-7_78_0)
+        GIT_TAG curl-7_84_0)
 
     FetchContent_GetProperties(embedded_curl)
     if(NOT embedded_curl_POPULATED)
@@ -147,19 +134,19 @@ if(USE_EMBEDDED_CURL)
     endif()
 
     if(WIN32)
-        set(CMAKE_USE_SCHANNEL ON CACHE BOOL "" FORCE)
+        set(CURL_USE_SCHANNEL ON CACHE BOOL "" FORCE)
         set(CURL_CA_PATH "none" CACHE STRING "" FORCE)
         set(CURL_CA_BUNDLE "none" CACHE STRING "" FORCE)
     endif()
 
     if(APPLE)
-        set(CMAKE_USE_SECTRANSP ON CACHE BOOL "" FORCE)
+        set(CURL_USE_SECTRANSP ON CACHE BOOL "" FORCE)
         set(CURL_CA_PATH "none" CACHE STRING "" FORCE)
         set(CURL_CA_BUNDLE "none" CACHE STRING "" FORCE)
     endif()
 
     if(UNIX AND NOT APPLE)
-        set(CMAKE_USE_OPENSSL ON CACHE BOOL "" FORCE)
+        set(CURL_USE_OPENSSL ON CACHE BOOL "" FORCE)
         set(CURL_CA_PATH "auto" CACHE STRING "" FORCE)
         set(CURL_CA_BUNDLE "auto" CACHE STRING "" FORCE)
     endif()
@@ -170,13 +157,27 @@ if(USE_EMBEDDED_CURL)
 endif()
 
 #
-# unit tests
+# BUILD_AS_STANDALONE
 #
 
-if(BUILD_AS_STANDALONE)
-    option(BUILD_WITH_UNTESTS "Build with unit tests" ON)
-    if(BUILD_WITH_UNTESTS)
-        enable_testing()
-        add_subdirectory(untests)
-    endif()
+if(NOT ${BUILD_AS_STANDALONE})
+    return()
 endif()
+
+target_compile_options(${PROJECT_NAME}
+    PUBLIC
+    $<$<CXX_COMPILER_ID:MSVC>:
+        /WX /W4>
+    PUBLIC
+    $<$<CXX_COMPILER_ID:GNU>:
+        -Werror -Wall -Wextra -Wpedantic>
+    PUBLIC
+    $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:
+        -Werror -Weverything -Wconversion>)
+
+enable_testing()
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "CMake")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
+add_subdirectory(untests)
