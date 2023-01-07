@@ -1,53 +1,13 @@
-# 3.11 version is required for `FetchContent`
-cmake_minimum_required(VERSION 3.11 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.21 FATAL_ERROR)
 
-if(NOT DEFINED PROJECT_NAME)
-    set(BUILD_AS_STANDALONE ON)
-else()
-    set(BUILD_AS_STANDALONE OFF)
-endif()
-
-project(curly.hpp)
+project(curly.hpp
+    VERSION "0.0.1"
+    DESCRIPTION "Simple cURL C++17 wrapper"
+    HOMEPAGE_URL "https://github.com/blackmatov/curly.hpp")
 
 option(USE_STATIC_CRT "Use static C runtime library" OFF)
 option(USE_SYSTEM_CURL "Build with cURL from system paths" OFF)
 option(USE_EMBEDDED_CURL "Build with embedded cURL library" ON)
-
-#
-# linking
-#
-
-if(MSVC AND USE_STATIC_CRT)
-    foreach(flag CMAKE_C_FLAGS
-                 CMAKE_C_FLAGS_DEBUG
-                 CMAKE_C_FLAGS_RELEASE
-                 CMAKE_C_FLAGS_MINSIZEREL
-                 CMAKE_C_FLAGS_RELWITHDEBINFO
-                 CMAKE_CXX_FLAGS
-                 CMAKE_CXX_FLAGS_DEBUG
-                 CMAKE_CXX_FLAGS_RELEASE
-                 CMAKE_CXX_FLAGS_MINSIZEREL
-                 CMAKE_CXX_FLAGS_RELWITHDEBINFO)
-        if(${flag} MATCHES "/MD")
-            string(REGEX REPLACE "/MD" "/MT" ${flag} "${${flag}}")
-        endif()
-        if(${flag} MATCHES "/MDd")
-            string(REGEX REPLACE "/MDd" "/MTd" ${flag} "${${flag}}")
-        endif()
-    endforeach()
-endif()
-
-#
-# coverage
-#
-
-option(BUILD_WITH_COVERAGE "Build with coverage" OFF)
-if(BUILD_WITH_COVERAGE AND (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang"))
-    set(COVERAGE_FLAGS "--coverage")
-    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} ${COVERAGE_FLAGS}")
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${COVERAGE_FLAGS}")
-    set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} ${COVERAGE_FLAGS}")
-endif()
 
 #
 # library
@@ -65,6 +25,9 @@ file(GLOB_RECURSE CURLY_HPP_SOURCES
 add_library(${PROJECT_NAME} STATIC
     ${CURLY_HPP_HEADERS}
     ${CURLY_HPP_SOURCES})
+
+add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS
+    ${PROJECT_NAME})
 
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES
     ${CURLY_HPP_HEADERS}
@@ -98,6 +61,11 @@ target_compile_options(${PROJECT_NAME}
         -Wno-weak-vtables
         >)
 
+if(USE_STATIC_CRT)
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 #
 # dependencies
 #
@@ -115,8 +83,7 @@ if(USE_EMBEDDED_CURL)
     include(FetchContent)
     FetchContent_Declare(
         embedded_curl
-        GIT_REPOSITORY https://github.com/curl/curl
-        GIT_TAG curl-7_84_0)
+        GIT_REPOSITORY https://github.com/curl/curl)
 
     FetchContent_GetProperties(embedded_curl)
     if(NOT embedded_curl_POPULATED)
@@ -157,27 +124,29 @@ if(USE_EMBEDDED_CURL)
 endif()
 
 #
-# BUILD_AS_STANDALONE
+# DEVELOPER
 #
 
-if(NOT ${BUILD_AS_STANDALONE})
-    return()
+if(PROJECT_IS_TOP_LEVEL)
+    target_compile_options(${PROJECT_NAME}
+        PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:
+            /WX /W4>
+        PRIVATE
+        $<$<CXX_COMPILER_ID:GNU>:
+            -Werror -Wall -Wextra -Wpedantic>
+        PRIVATE
+        $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:
+            -Werror -Weverything -Wconversion>)
+
+    enable_testing()
+    set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+    set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "CMake")
+    list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
+    include(EnableASan)
+    include(EnableGCov)
+    include(EnableUBSan)
+
+    add_subdirectory(untests)
 endif()
-
-target_compile_options(${PROJECT_NAME}
-    PUBLIC
-    $<$<CXX_COMPILER_ID:MSVC>:
-        /WX /W4>
-    PUBLIC
-    $<$<CXX_COMPILER_ID:GNU>:
-        -Werror -Wall -Wextra -Wpedantic>
-    PUBLIC
-    $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:
-        -Werror -Weverything -Wconversion>)
-
-enable_testing()
-set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "CMake")
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-
-add_subdirectory(untests)

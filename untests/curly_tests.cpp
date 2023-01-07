@@ -1,10 +1,10 @@
 /*******************************************************************************
  * This file is part of the "https://github.com/blackmatov/curly.hpp"
  * For conditions of distribution and use, see copyright notice in LICENSE.md
- * Copyright (C) 2019-2022, by Matvey Cherevko (blackmatov@gmail.com)
+ * Copyright (C) 2019-2023, by Matvey Cherevko (blackmatov@gmail.com)
  ******************************************************************************/
 
-#include "doctest/doctest.hpp"
+#include <doctest/doctest.h>
 
 #include <curly.hpp/curly.hpp>
 namespace net = curly_hpp;
@@ -101,7 +101,7 @@ TEST_CASE("curly") {
 
     SUBCASE("wait") {
         {
-            auto req = net::request_builder("https://httpbin.org/delay/1").send();
+            auto req = net::request_builder("https://httpbin.org/delay/2").send();
             REQUIRE(req.status() == net::req_status::pending);
             REQUIRE(req.wait() == net::req_status::done);
             REQUIRE(req.status() == net::req_status::done);
