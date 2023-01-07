@@ -4,7 +4,7 @@
  * Copyright (C) 2019-2023, by Matvey Cherevko (blackmatov@gmail.com)
  ******************************************************************************/
 
-#include "doctest/doctest.hpp"
+#include <doctest/doctest.h>
 
 #include <curly.hpp/curly.hpp>
 namespace net = curly_hpp;
