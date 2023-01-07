@@ -29,11 +29,11 @@
             }
         },
         {
-            "name": "linux-clang-10",
+            "name": "linux-clang-7",
             "inherits": "linux-base",
             "cacheVariables": {
-                "CMAKE_C_COMPILER": "clang-10",
-                "CMAKE_CXX_COMPILER": "clang++-10"
+                "CMAKE_C_COMPILER": "clang-7",
+                "CMAKE_CXX_COMPILER": "clang++-7"
             }
         },
         {
@@ -45,11 +45,11 @@
             }
         },
         {
-            "name": "linux-gcc-10",
+            "name": "linux-gcc-7",
             "inherits": "linux-base",
             "cacheVariables": {
-                "CMAKE_C_COMPILER": "gcc-10",
-                "CMAKE_CXX_COMPILER": "g++-10"
+                "CMAKE_C_COMPILER": "gcc-7",
+                "CMAKE_CXX_COMPILER": "g++-7"
             }
         },
         {
@@ -178,14 +178,14 @@
 
     "buildPresets": [
         {
-            "name": "linux-clang-10-debug",
+            "name": "linux-clang-7-debug",
             "configuration": "Debug",
-            "configurePreset": "linux-clang-10"
+            "configurePreset": "linux-clang-7"
         },
         {
-            "name": "linux-clang-10-release",
+            "name": "linux-clang-7-release",
             "configuration": "Release",
-            "configurePreset": "linux-clang-10"
+            "configurePreset": "linux-clang-7"
         },
         {
             "name": "linux-clang-14-debug",
@@ -198,14 +198,14 @@
             "configurePreset": "linux-clang-14"
         },
         {
-            "name": "linux-gcc-10-debug",
+            "name": "linux-gcc-7-debug",
             "configuration": "Debug",
-            "configurePreset": "linux-gcc-10"
+            "configurePreset": "linux-gcc-7"
         },
         {
-            "name": "linux-gcc-10-release",
+            "name": "linux-gcc-7-release",
             "configuration": "Release",
-            "configurePreset": "linux-gcc-10"
+            "configurePreset": "linux-gcc-7"
         },
         {
             "name": "linux-gcc-12-debug",
@@ -289,9 +289,9 @@
             "configuration": "Release"
         },
         {
-            "name": "linux-clang-10-release",
+            "name": "linux-clang-7-release",
             "inherits": "test-base",
-            "configurePreset": "linux-clang-10"
+            "configurePreset": "linux-clang-7"
         },
         {
             "name": "linux-clang-14-release",
@@ -299,9 +299,9 @@
             "configurePreset": "linux-clang-14"
         },
         {
-            "name": "linux-gcc-10-release",
+            "name": "linux-gcc-7-release",
             "inherits": "test-base",
-            "configurePreset": "linux-gcc-10"
+            "configurePreset": "linux-gcc-7"
         },
         {
             "name": "linux-gcc-12-release",
