@@ -83,8 +83,7 @@ if(USE_EMBEDDED_CURL)
     include(FetchContent)
     FetchContent_Declare(
         embedded_curl
-        GIT_REPOSITORY https://github.com/curl/curl
-        GIT_TAG curl-7_87_0)
+        GIT_REPOSITORY https://github.com/curl/curl)
 
     FetchContent_GetProperties(embedded_curl)
     if(NOT embedded_curl_POPULATED)
